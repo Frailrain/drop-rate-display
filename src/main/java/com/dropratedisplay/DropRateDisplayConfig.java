@@ -33,10 +33,21 @@ public interface DropRateDisplayConfig extends Config
 	}
 
 	@ConfigItem(
+		keyName = "showInventoryRates",
+		name = "Show rates on inventory items",
+		description = "Briefly show the drop rate on items received from pickpockets, salvage and chests (about 30 seconds)",
+		position = 3
+	)
+	default boolean showInventoryRates()
+	{
+		return true;
+	}
+
+	@ConfigItem(
 		keyName = "minimumRarity",
 		name = "Minimum rarity to display",
 		description = "Only show rates for items rarer than this (e.g. 25 means 1/25 or rarer). Set to 0 to show all.",
-		position = 3
+		position = 4
 	)
 	default int minimumRarity()
 	{
@@ -46,8 +57,8 @@ public interface DropRateDisplayConfig extends Config
 	@ConfigItem(
 		keyName = "rateColor",
 		name = "Rate text colour",
-		description = "Colour of the drop rate text drawn on ground items",
-		position = 4
+		description = "Colour of the drop rate text drawn on items",
+		position = 5
 	)
 	default Color rateColor()
 	{
@@ -58,10 +69,22 @@ public interface DropRateDisplayConfig extends Config
 		keyName = "showQualitativeRates",
 		name = "Show qualitative rates",
 		description = "Display 'Uncommon', 'Rare' etc. when the exact rate is unknown",
-		position = 5
+		position = 6
 	)
 	default boolean showQualitativeRates()
 	{
 		return false;
+	}
+
+	@ConfigItem(
+		keyName = "mergeWithGroundItems",
+		name = "Merge with Ground Items",
+		description = "When the Ground Items plugin is enabled, show only the rate on the ground instead of "
+			+ "repeating the item name it already draws",
+		position = 7
+	)
+	default boolean mergeWithGroundItems()
+	{
+		return true;
 	}
 }

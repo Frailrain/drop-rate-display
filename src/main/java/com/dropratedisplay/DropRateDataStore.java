@@ -8,6 +8,7 @@ import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -47,6 +48,7 @@ public class DropRateDataStore
 	private final Gson gson;
 
 	private Map<String, SourceDropTable> sources = Collections.emptyMap();
+	private Map<String, SourceDropTable> lowerCaseSources = Collections.emptyMap();
 
 	@Getter
 	private String version = "unknown";
@@ -89,15 +91,20 @@ public class DropRateDataStore
 			return;
 		}
 
-		data.sources.values().forEach(table ->
+		Map<String, SourceDropTable> lower = new HashMap<>();
+		for (Map.Entry<String, SourceDropTable> entry : data.sources.entrySet())
 		{
+			SourceDropTable table = entry.getValue();
 			if (table != null)
 			{
+				table.setSourceName(entry.getKey());
 				table.index();
+				lower.putIfAbsent(entry.getKey().toLowerCase(Locale.ROOT), table);
 			}
-		});
+		}
 
 		this.sources = data.sources;
+		this.lowerCaseSources = lower;
 		this.version = data.version != null ? data.version : "unknown";
 	}
 
@@ -113,15 +120,26 @@ public class DropRateDataStore
 		}
 
 		String key = SOURCE_NAME_OVERRIDES.getOrDefault(sourceName, sourceName);
-		SourceDropTable table = sources.get(key);
+		SourceDropTable table = lookupKey(key);
 
 		if (table == null)
 		{
 			int hash = key.indexOf('#');
 			if (hash > 0)
 			{
-				table = sources.get(key.substring(0, hash));
+				table = lookupKey(key.substring(0, hash));
 			}
+		}
+		return table;
+	}
+
+	/** Exact match first, then case-insensitive (chat gives lowercase source names like "man" / "martial"). */
+	private SourceDropTable lookupKey(String key)
+	{
+		SourceDropTable table = sources.get(key);
+		if (table == null)
+		{
+			table = lowerCaseSources.get(key.toLowerCase(Locale.ROOT));
 		}
 		return table;
 	}

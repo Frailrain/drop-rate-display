@@ -30,6 +30,7 @@ import net.runelite.client.game.ItemManager;
 import net.runelite.client.game.ItemStack;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
+import net.runelite.client.plugins.PluginManager;
 import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.client.util.Text;
 
@@ -37,7 +38,7 @@ import net.runelite.client.util.Text;
 @PluginDescriptor(
 	name = "Drop Rate Display",
 	description = "Shows drop rates for received loot. Monster drops show the rate on the ground item; "
-		+ "pickpocket, salvage and chest loot show the rate in chat.",
+		+ "pickpocket, salvage and chest loot show the rate in chat and on the received item.",
 	tags = {"drops", "loot", "rate", "rarity", "wiki"}
 )
 public class DropRateDisplayPlugin extends Plugin
@@ -48,11 +49,12 @@ public class DropRateDisplayPlugin extends Plugin
 	private static final Pattern SALVAGE_PATTERN = Pattern.compile("You sort through the\\s+(?<tier>\\S+)\\s+salvage.*");
 	private static final Pattern CLUE_COMPLETED_PATTERN = Pattern.compile("You have completed [0-9]+ ([a-z]+) Treasure Trails?\\.");
 
-	// Number of game ticks a pending loot trigger waits for the item container to change before expiring.
-	private static final int PENDING_TIMEOUT_TICKS = 2;
+	// Loot arriving in the inventory is matched to its trigger within this many game ticks either way,
+	// so it works regardless of whether the chat message or the container change fires first.
+	private static final int MATCH_WINDOW_TICKS = 1;
 
 	@Inject
-	private Client client;
+	Client client;
 
 	@Inject
 	DropRateDisplayConfig config;
@@ -67,16 +69,25 @@ public class DropRateDisplayPlugin extends Plugin
 	DropRateDisplayOverlay overlay;
 
 	@Inject
+	DropRateInventoryOverlay inventoryOverlay;
+
+	@Inject
+	ChatMessageManager chatMessageManager;
+
+	@Inject
 	private OverlayManager overlayManager;
 
 	@Inject
-	private ChatMessageManager chatMessageManager;
+	private PluginManager pluginManager;
 
-	// Non-NPC loot detection state. A trigger (chat/widget) sets a pending source and snapshots the
-	// inventory; the next inventory change is diffed against the snapshot to find what arrived.
+	// Non-NPC loot detection: a rolling inventory snapshot is kept up to date, and a trigger
+	// (chat message or reward widget) names the source. When both a source and a fresh set of added
+	// items exist within MATCH_WINDOW_TICKS, they are paired -- order-independent.
+	private Map<Integer, Integer> inventorySnapshot = new HashMap<>();
+	private Map<Integer, Integer> recentAdded;
+	private int recentAddedTick = Integer.MIN_VALUE;
 	private String pendingSource;
-	private Map<Integer, Integer> preLootInventory;
-	private int pendingTick;
+	private int pendingTick = Integer.MIN_VALUE;
 	private String lastClueTier;
 
 	@Provides
@@ -90,7 +101,8 @@ public class DropRateDisplayPlugin extends Plugin
 	{
 		dataStore.load();
 		overlayManager.add(overlay);
-		resetPending();
+		overlayManager.add(inventoryOverlay);
+		resetState();
 		log.debug("Drop Rate Display started ({} sources)", dataStore.getSourceCount());
 	}
 
@@ -98,8 +110,10 @@ public class DropRateDisplayPlugin extends Plugin
 	protected void shutDown()
 	{
 		overlayManager.remove(overlay);
+		overlayManager.remove(inventoryOverlay);
 		overlay.clear();
-		resetPending();
+		inventoryOverlay.clear();
+		resetState();
 	}
 
 	// --- Monster kills: floor drops rendered on the ground -----------------------------------------
@@ -139,16 +153,17 @@ public class DropRateDisplayPlugin extends Plugin
 				continue;
 			}
 
-			overlay.addGroundRate(location, itemName + " (" + RateParser.formatRate(entry.getRate()) + ")");
+			overlay.addGroundRate(location, itemName, RateParser.formatRate(entry.getRate()));
 		}
 	}
 
-	// --- Non-NPC loot: chat/widget triggers, then inventory diff -----------------------------------
+	// --- Non-NPC loot: chat/widget triggers paired with the inventory change -----------------------
 
 	@Subscribe
 	public void onChatMessage(ChatMessage event)
 	{
-		if (event.getType() != ChatMessageType.GAMEMESSAGE && event.getType() != ChatMessageType.SPAM)
+		ChatMessageType type = event.getType();
+		if (type != ChatMessageType.GAMEMESSAGE && type != ChatMessageType.SPAM)
 		{
 			return;
 		}
@@ -166,14 +181,25 @@ public class DropRateDisplayPlugin extends Plugin
 		Matcher pickpocket = PICKPOCKET_PATTERN.matcher(message);
 		if (pickpocket.matches())
 		{
-			beginPending(Text.removeTags(pickpocket.group("target")));
+			String source = Text.removeTags(pickpocket.group("target"));
+			log.debug("[Drop Rate] pickpocket trigger -> '{}'", source);
+			beginPending(source);
 			return;
 		}
 
 		Matcher salvage = SALVAGE_PATTERN.matcher(message);
 		if (salvage.matches())
 		{
-			beginPending(Text.removeTags(salvage.group("tier")) + " salvage");
+			String source = Text.removeTags(salvage.group("tier")) + " salvage";
+			log.debug("[Drop Rate] salvage trigger -> '{}'", source);
+			beginPending(source);
+			return;
+		}
+
+		// Diagnostic: surface any salvage-related message that did not match, so the pattern can be fixed.
+		if (log.isDebugEnabled() && message.toLowerCase().contains("salvage"))
+		{
+			log.debug("[Drop Rate] unmatched salvage-ish message: '{}'", message);
 		}
 	}
 
@@ -194,43 +220,73 @@ public class DropRateDisplayPlugin extends Plugin
 	@Subscribe
 	public void onItemContainerChanged(ItemContainerChanged event)
 	{
-		if (pendingSource == null || event.getContainerId() != InventoryID.INV)
+		if (event.getContainerId() != InventoryID.INV)
 		{
 			return;
 		}
+		handleInventoryChange(toItemMap(event.getItemContainer()));
+	}
 
-		Map<Integer, Integer> current = toItemMap(event.getItemContainer());
-		Map<Integer, Integer> added = InventoryDiff.added(preLootInventory, current);
-
-		String source = pendingSource;
-		resetPending();
+	/** Core inventory-diff step, split out from the event handler so it can be driven directly in tests. */
+	void handleInventoryChange(Map<Integer, Integer> current)
+	{
+		Map<Integer, Integer> added = InventoryDiff.added(inventorySnapshot, current);
+		inventorySnapshot = current;
 
 		if (!added.isEmpty())
 		{
-			processInventoryLoot(source, added);
+			recentAdded = added;
+			recentAddedTick = client.getTickCount();
 		}
+
+		tryMatch();
 	}
 
 	@Subscribe
 	public void onGameTick(GameTick event)
 	{
-		// Drop a stale trigger that never produced an inventory change so it can't mis-attribute later loot.
-		if (pendingSource != null && client.getTickCount() - pendingTick > PENDING_TIMEOUT_TICKS)
+		int tick = client.getTickCount();
+		if (pendingSource != null && tick - pendingTick > MATCH_WINDOW_TICKS)
 		{
-			resetPending();
+			pendingSource = null;
 		}
+		if (recentAdded != null && tick - recentAddedTick > MATCH_WINDOW_TICKS)
+		{
+			recentAdded = null;
+		}
+
+		overlay.setMergeMode(config.mergeWithGroundItems() && isGroundItemsEnabled());
 	}
 
-	private void beginPending(String source)
+	void beginPending(String source)
 	{
-		if (!config.showChatRates())
+		if (!config.showChatRates() && !config.showInventoryRates())
 		{
 			return;
 		}
 
 		pendingSource = source;
 		pendingTick = client.getTickCount();
-		preLootInventory = toItemMap(client.getItemContainer(InventoryID.INV));
+		tryMatch();
+	}
+
+	/** Pairs a pending source with recently added items when both are present within the match window. */
+	private void tryMatch()
+	{
+		if (pendingSource == null || recentAdded == null)
+		{
+			return;
+		}
+		if (Math.abs(pendingTick - recentAddedTick) > MATCH_WINDOW_TICKS)
+		{
+			return;
+		}
+
+		String source = pendingSource;
+		Map<Integer, Integer> added = recentAdded;
+		pendingSource = null;
+		recentAdded = null;
+		processInventoryLoot(source, added);
 	}
 
 	private void processInventoryLoot(String source, Map<Integer, Integer> added)
@@ -238,8 +294,11 @@ public class DropRateDisplayPlugin extends Plugin
 		SourceDropTable table = dataStore.getSource(source);
 		if (table == null)
 		{
+			log.debug("[Drop Rate] no drop table for inventory source '{}'", source);
 			return;
 		}
+
+		String displaySource = table.getSourceName() != null ? table.getSourceName() : source;
 
 		for (Integer itemId : added.keySet())
 		{
@@ -250,7 +309,15 @@ public class DropRateDisplayPlugin extends Plugin
 				continue;
 			}
 
-			sendChatMessage(itemName, source, RateParser.formatRate(entry.getRate()));
+			String rate = RateParser.formatRate(entry.getRate());
+			if (config.showChatRates())
+			{
+				sendChatMessage(itemName, displaySource, rate);
+			}
+			if (config.showInventoryRates())
+			{
+				inventoryOverlay.addRate(itemId, rate);
+			}
 		}
 	}
 
@@ -275,6 +342,22 @@ public class DropRateDisplayPlugin extends Plugin
 		}
 
 		return RateParser.isQualitative(rate) && config.showQualitativeRates();
+	}
+
+	private boolean isGroundItemsEnabled()
+	{
+		if (pluginManager == null)
+		{
+			return false;
+		}
+		for (Plugin plugin : pluginManager.getPlugins())
+		{
+			if ("GroundItemsPlugin".equals(plugin.getClass().getSimpleName()))
+			{
+				return pluginManager.isPluginEnabled(plugin);
+			}
+		}
+		return false;
 	}
 
 	private void sendChatMessage(String itemName, String source, String rate)
@@ -315,9 +398,11 @@ public class DropRateDisplayPlugin extends Plugin
 		return map;
 	}
 
-	private void resetPending()
+	private void resetState()
 	{
 		pendingSource = null;
-		preLootInventory = null;
+		recentAdded = null;
+		lastClueTier = null;
+		inventorySnapshot = new HashMap<>();
 	}
 }

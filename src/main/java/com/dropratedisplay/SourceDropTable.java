@@ -19,10 +19,19 @@ public class SourceDropTable
 	@Getter
 	private List<Integer> npcIds;
 
+	/** The wiki source name (the JSON map key). Populated at load time; not serialised. */
+	@Getter
+	private transient String sourceName;
+
 	/** Drops keyed by item name. */
 	private Map<String, DropRateEntry> drops;
 
 	private transient Map<String, DropRateEntry> lowerCaseIndex;
+
+	void setSourceName(String sourceName)
+	{
+		this.sourceName = sourceName;
+	}
 
 	/**
 	 * Builds the case-insensitive lookup index and back-fills each entry's item name from its key.

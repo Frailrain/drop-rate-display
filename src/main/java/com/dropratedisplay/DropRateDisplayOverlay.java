@@ -23,6 +23,9 @@ import net.runelite.client.ui.overlay.OverlayUtil;
  *
  * <p>Independent of the core Ground Items plugin: the text is drawn at the item's world position, so
  * it appears whether or not Ground Items is enabled. Entries expire after {@link #EXPIRY_MS}.
+ *
+ * <p>When {@linkplain #setMergeMode(boolean) merge mode} is on (the Ground Items plugin is enabled and
+ * already draws the item name), only the rate is shown to avoid repeating the name.
  */
 @Singleton
 public class DropRateDisplayOverlay extends Overlay
@@ -37,6 +40,8 @@ public class DropRateDisplayOverlay extends Overlay
 	/** Guarded by its own monitor; mutated from loot events and read from the render thread. */
 	private final List<GroundRate> rates = new ArrayList<>();
 
+	private volatile boolean mergeMode;
+
 	@Inject
 	DropRateDisplayOverlay(Client client, DropRateDisplayConfig config)
 	{
@@ -46,21 +51,27 @@ public class DropRateDisplayOverlay extends Overlay
 		setLayer(OverlayLayer.ABOVE_SCENE);
 	}
 
-	void addGroundRate(WorldPoint point, String text)
+	void addGroundRate(WorldPoint point, String itemName, String rate)
 	{
-		if (point == null || text == null)
+		if (point == null || itemName == null || rate == null)
 		{
 			return;
 		}
 
 		synchronized (rates)
 		{
-			rates.add(new GroundRate(point, text, System.currentTimeMillis() + EXPIRY_MS));
+			rates.add(new GroundRate(point, itemName, rate, System.currentTimeMillis() + EXPIRY_MS));
 			while (rates.size() > MAX_ENTRIES)
 			{
 				rates.remove(0);
 			}
 		}
+	}
+
+	/** When true, render only the rate (Ground Items is already drawing the item name). */
+	void setMergeMode(boolean mergeMode)
+	{
+		this.mergeMode = mergeMode;
 	}
 
 	void clear()
@@ -91,6 +102,8 @@ public class DropRateDisplayOverlay extends Overlay
 			snapshot = new ArrayList<>(rates);
 		}
 
+		final boolean merge = mergeMode;
+
 		// Stack multiple entries on the same tile so they don't overwrite each other.
 		final Map<WorldPoint, Integer> perTileCount = new HashMap<>();
 		for (GroundRate rate : snapshot)
@@ -101,7 +114,8 @@ public class DropRateDisplayOverlay extends Overlay
 				continue;
 			}
 
-			Point textLocation = Perspective.getCanvasTextLocation(client, graphics, localPoint, rate.text, 0);
+			String display = merge ? rate.rate : rate.itemName + " (" + rate.rate + ")";
+			Point textLocation = Perspective.getCanvasTextLocation(client, graphics, localPoint, display, 0);
 			if (textLocation == null)
 			{
 				continue;
@@ -109,7 +123,7 @@ public class DropRateDisplayOverlay extends Overlay
 
 			int index = perTileCount.merge(rate.point, 1, Integer::sum) - 1;
 			Point stacked = new Point(textLocation.getX(), textLocation.getY() - index * LINE_HEIGHT);
-			OverlayUtil.renderTextLocation(graphics, stacked, rate.text, config.rateColor());
+			OverlayUtil.renderTextLocation(graphics, stacked, display, config.rateColor());
 		}
 
 		return null;
@@ -118,13 +132,15 @@ public class DropRateDisplayOverlay extends Overlay
 	private static final class GroundRate
 	{
 		private final WorldPoint point;
-		private final String text;
+		private final String itemName;
+		private final String rate;
 		private final long expiresAt;
 
-		private GroundRate(WorldPoint point, String text, long expiresAt)
+		private GroundRate(WorldPoint point, String itemName, String rate, long expiresAt)
 		{
 			this.point = point;
-			this.text = text;
+			this.itemName = itemName;
+			this.rate = rate;
 			this.expiresAt = expiresAt;
 		}
 	}
