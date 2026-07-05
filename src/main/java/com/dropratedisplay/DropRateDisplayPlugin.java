@@ -323,9 +323,14 @@ public class DropRateDisplayPlugin extends Plugin
 	 */
 	private boolean shouldDisplay(String rate)
 	{
-		if (rate == null || rate.trim().isEmpty() || RateParser.isAlways(rate))
+		if (rate == null || rate.trim().isEmpty())
 		{
 			return false;
+		}
+
+		if (RateParser.isAlways(rate))
+		{
+			return config.showGuaranteedDrops();
 		}
 
 		double denominator = RateParser.parseDenominator(rate);

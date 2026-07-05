@@ -90,4 +90,14 @@ public class RateParserTest
 		assertEquals("1/50", RateParser.formatRate("  1/50  "));
 		assertEquals("Rare", RateParser.formatRate("Rare"));
 	}
+
+	@Test
+	public void formatSimplifiesToOneInN()
+	{
+		assertEquals("1/24.4", RateParser.formatRate("100/2,440"));
+		assertEquals("1/8.1", RateParser.formatRate("300/2440"));
+		assertEquals("1/42.7", RateParser.formatRate("3/128"));
+		assertEquals("1/512", RateParser.formatRate("1/512"));
+		assertEquals("Always", RateParser.formatRate("Always"));
+	}
 }

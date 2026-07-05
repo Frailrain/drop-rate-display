@@ -108,9 +108,10 @@ public class DropRateDisplayOverlay extends Overlay
 			snapshot = new ArrayList<>(rates);
 		}
 
+		final boolean merge = config.mergeWithGroundItems() && groundItems.isEnabled();
 		final Map<WorldPoint, List<GroundItemInfo>> giItems =
-			config.mergeWithGroundItems() ? groundItems.itemsByTile() : java.util.Collections.emptyMap();
-		final String priceMode = giItems.isEmpty() ? null : priceDisplayMode();
+			merge ? groundItems.itemsByTile() : java.util.Collections.emptyMap();
+		final String priceMode = merge ? priceDisplayMode() : null;
 		final FontMetrics fm = graphics.getFontMetrics();
 		final Map<WorldPoint, Integer> fallbackStack = new HashMap<>();
 
@@ -122,13 +123,20 @@ public class DropRateDisplayOverlay extends Overlay
 				continue;
 			}
 
-			final List<GroundItemInfo> tileItems = giItems.get(rate.point);
-			if (tileItems != null && renderMerged(graphics, localPoint, rate, tileItems, priceMode, fm))
+			if (merge)
 			{
+				// Only annotate items Ground Items is currently drawing. Once an item is picked up (or
+				// hidden), it leaves the table, so we draw nothing for it -- no lingering, no fallback
+				// text landing on another item's row.
+				final List<GroundItemInfo> tileItems = giItems.get(rate.point);
+				if (tileItems != null)
+				{
+					renderMerged(graphics, localPoint, rate, tileItems, priceMode, fm);
+				}
 				continue;
 			}
 
-			// Fallback: Ground Items isn't drawing this (disabled / despawned / unavailable) — self-label it.
+			// Ground Items off/unavailable: self-labelled fallback with its own stacking and expiry.
 			final String text = rate.itemName + " (" + rate.rate + ")";
 			final Point point = Perspective.getCanvasTextLocation(client, graphics, localPoint, text, OFFSET_Z);
 			if (point == null)
@@ -142,8 +150,8 @@ public class DropRateDisplayOverlay extends Overlay
 		return null;
 	}
 
-	/** Appends the rate after this item's Ground Items line, on the same row. Returns false if not found. */
-	private boolean renderMerged(Graphics2D graphics, LocalPoint localPoint, GroundRate rate,
+	/** Appends the rate after this item's Ground Items line, on the same row. No-op if the item is gone. */
+	private void renderMerged(Graphics2D graphics, LocalPoint localPoint, GroundRate rate,
 		List<GroundItemInfo> tileItems, String priceMode, FontMetrics fm)
 	{
 		int offset = -1;
@@ -160,20 +168,19 @@ public class DropRateDisplayOverlay extends Overlay
 
 		if (info == null)
 		{
-			return false;
+			return;
 		}
 
 		final String line = buildItemString(info, priceMode);
 		final Point point = Perspective.getCanvasTextLocation(client, graphics, localPoint, line, OFFSET_Z);
 		if (point == null)
 		{
-			return false;
+			return;
 		}
 
 		final int x = point.getX() + fm.stringWidth(line) + GAP_PX;
 		final int y = point.getY() - STRING_GAP * offset;
 		drawRate(graphics, x, y, rate.rate);
-		return true;
 	}
 
 	private void drawRate(Graphics2D graphics, int x, int y, String text)

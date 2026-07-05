@@ -77,11 +77,22 @@ public interface DropRateDisplayConfig extends Config
 	}
 
 	@ConfigItem(
+		keyName = "showGuaranteedDrops",
+		name = "Show guaranteed drops",
+		description = "Also show 'Always' for 100% drops such as bones and ashes",
+		position = 7
+	)
+	default boolean showGuaranteedDrops()
+	{
+		return false;
+	}
+
+	@ConfigItem(
 		keyName = "mergeWithGroundItems",
 		name = "Merge with Ground Items",
-		description = "When the Ground Items plugin is enabled, show only the rate on the ground instead of "
-			+ "repeating the item name it already draws",
-		position = 7
+		description = "When the Ground Items plugin is enabled, append the rate to each item's line instead "
+			+ "of drawing a separate labelled line",
+		position = 8
 	)
 	default boolean mergeWithGroundItems()
 	{

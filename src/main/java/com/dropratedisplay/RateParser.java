@@ -1,5 +1,6 @@
 package com.dropratedisplay;
 
+import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -126,12 +127,44 @@ public final class RateParser
 		}
 
 		String trimmed = rate.trim();
-		Matcher matcher = FRACTION.matcher(trimmed);
-		if (matcher.find())
+		if (isAlways(trimmed))
 		{
-			return matcher.group(1) + "/" + matcher.group(2);
+			return "Always";
 		}
-		return trimmed;
+
+		Matcher matcher = FRACTION.matcher(trimmed);
+		if (!matcher.find())
+		{
+			return trimmed;
+		}
+
+		try
+		{
+			double numerator = Double.parseDouble(stripCommas(matcher.group(1)));
+			double denominator = Double.parseDouble(stripCommas(matcher.group(2)));
+			if (numerator > 0 && denominator > 0)
+			{
+				// Normalise to "1 in N" so unwieldy wiki fractions like 100/2,440 read as 1/24.4.
+				return "1/" + formatOneInN(denominator / numerator);
+			}
+		}
+		catch (NumberFormatException ignored)
+		{
+			// fall through to the raw fraction
+		}
+
+		return matcher.group(1) + "/" + matcher.group(2);
+	}
+
+	/** "1 in N": whole numbers grouped with commas ("2,448"), otherwise one decimal place ("24.4"). */
+	private static String formatOneInN(double n)
+	{
+		double rounded = Math.round(n * 10.0) / 10.0;
+		if (rounded == Math.floor(rounded))
+		{
+			return String.format(Locale.US, "%,d", (long) rounded);
+		}
+		return String.format(Locale.US, "%.1f", rounded);
 	}
 
 	private static String stripCommas(String number)
