@@ -1,0 +1,16 @@
+.gradle
+build
+bin/
+.idea/
+.vscode/
+.project
+.settings/
+.classpath
+nbactions.xml
+nb-configuration.xml
+nbproject/
+
+# Data generation script artifacts
+drop_rates_pretty.json
+__pycache__/
+*.pyc

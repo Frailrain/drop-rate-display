@@ -1,0 +1,8 @@
+# Normalize text line endings; keep platform-correct endings for wrapper scripts.
+* text=auto eol=lf
+*.bat text eol=crlf
+gradlew text eol=lf
+
+# Treat these as binary so they are never line-ending converted.
+*.jar binary
+*.png binary
