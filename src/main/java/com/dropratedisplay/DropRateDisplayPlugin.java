@@ -30,7 +30,6 @@ import net.runelite.client.game.ItemManager;
 import net.runelite.client.game.ItemStack;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
-import net.runelite.client.plugins.PluginManager;
 import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.client.util.Text;
 
@@ -76,9 +75,6 @@ public class DropRateDisplayPlugin extends Plugin
 
 	@Inject
 	private OverlayManager overlayManager;
-
-	@Inject
-	private PluginManager pluginManager;
 
 	// Non-NPC loot detection: a rolling inventory snapshot is kept up to date, and a trigger
 	// (chat message or reward widget) names the source. When both a source and a fresh set of added
@@ -153,7 +149,7 @@ public class DropRateDisplayPlugin extends Plugin
 				continue;
 			}
 
-			overlay.addGroundRate(location, itemName, RateParser.formatRate(entry.getRate()));
+			overlay.addGroundRate(location, item.getId(), itemName, RateParser.formatRate(entry.getRate()));
 		}
 	}
 
@@ -254,8 +250,6 @@ public class DropRateDisplayPlugin extends Plugin
 		{
 			recentAdded = null;
 		}
-
-		overlay.setMergeMode(config.mergeWithGroundItems() && isGroundItemsEnabled());
 	}
 
 	void beginPending(String source)
@@ -342,22 +336,6 @@ public class DropRateDisplayPlugin extends Plugin
 		}
 
 		return RateParser.isQualitative(rate) && config.showQualitativeRates();
-	}
-
-	private boolean isGroundItemsEnabled()
-	{
-		if (pluginManager == null)
-		{
-			return false;
-		}
-		for (Plugin plugin : pluginManager.getPlugins())
-		{
-			if ("GroundItemsPlugin".equals(plugin.getClass().getSimpleName()))
-			{
-				return pluginManager.isPluginEnabled(plugin);
-			}
-		}
-		return false;
 	}
 
 	private void sendChatMessage(String itemName, String source, String rate)

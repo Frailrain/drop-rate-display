@@ -114,21 +114,21 @@ public class DropRateDisplayPluginTest
 	public void npcDropRendersRateOnGround()
 	{
 		plugin.onNpcLootReceived(npcLoot("Abyssal demon", new ItemStack(WHIP_ID, 1)));
-		verify(overlay).addGroundRate(eq(new WorldPoint(3200, 3200, 0)), eq("Abyssal whip"), contains("1/512"));
+		verify(overlay).addGroundRate(eq(new WorldPoint(3200, 3200, 0)), eq(WHIP_ID), eq("Abyssal whip"), contains("1/512"));
 	}
 
 	@Test
 	public void guaranteedDropIsNotShown()
 	{
 		plugin.onNpcLootReceived(npcLoot("Abyssal demon", new ItemStack(BONES_ID, 1)));
-		verify(overlay, never()).addGroundRate(any(), any(), any());
+		verify(overlay, never()).addGroundRate(any(), anyInt(), any(), any());
 	}
 
 	@Test
 	public void unknownSourceIsIgnored()
 	{
 		plugin.onNpcLootReceived(npcLoot("Cave goblin", new ItemStack(WHIP_ID, 1)));
-		verify(overlay, never()).addGroundRate(any(), any(), any());
+		verify(overlay, never()).addGroundRate(any(), anyInt(), any(), any());
 	}
 
 	@Test
@@ -136,7 +136,7 @@ public class DropRateDisplayPluginTest
 	{
 		when(config.showGroundItemRates()).thenReturn(false);
 		plugin.onNpcLootReceived(npcLoot("Abyssal demon", new ItemStack(WHIP_ID, 1)));
-		verify(overlay, never()).addGroundRate(any(), any(), any());
+		verify(overlay, never()).addGroundRate(any(), anyInt(), any(), any());
 	}
 
 	/** Salvage where the trigger arrives before the inventory change: must emit chat + inventory rate. */

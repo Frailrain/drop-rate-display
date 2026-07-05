@@ -1,6 +1,8 @@
 package com.dropratedisplay;
 
+import com.dropratedisplay.GroundItemsReader.GroundItemInfo;
 import java.awt.Dimension;
+import java.awt.FontMetrics;
 import java.awt.Graphics2D;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -13,45 +15,55 @@ import net.runelite.api.Perspective;
 import net.runelite.api.Point;
 import net.runelite.api.coords.LocalPoint;
 import net.runelite.api.coords.WorldPoint;
+import net.runelite.client.config.ConfigManager;
 import net.runelite.client.ui.overlay.Overlay;
 import net.runelite.client.ui.overlay.OverlayLayer;
 import net.runelite.client.ui.overlay.OverlayPosition;
-import net.runelite.client.ui.overlay.OverlayUtil;
+import net.runelite.client.ui.overlay.components.TextComponent;
+import net.runelite.client.util.QuantityFormatter;
 
 /**
- * Renders drop-rate text at the world tiles where monsters dropped notable loot.
+ * Draws drop rates for monster floor loot.
  *
- * <p>Independent of the core Ground Items plugin: the text is drawn at the item's world position, so
- * it appears whether or not Ground Items is enabled. Entries expire after {@link #EXPIRY_MS}.
+ * <p>When the Ground Items plugin is drawing the same items, this reads its live item table (via
+ * {@link GroundItemsReader}) to place our rate flush after each item's text on the correct row, so a
+ * multi-item pile shows each rate against its own line. Styling is always our own (configured colour +
+ * outline glow) — never Ground Items' colours.
  *
- * <p>When {@linkplain #setMergeMode(boolean) merge mode} is on (the Ground Items plugin is enabled and
- * already draws the item name), only the rate is shown to avoid repeating the name.
+ * <p>When Ground Items is off (or its data is unavailable, or merge is disabled), it falls back to a
+ * self-labelled {@code "Item (rate)"} line so the rate still has context.
  */
 @Singleton
 public class DropRateDisplayOverlay extends Overlay
 {
 	private static final long EXPIRY_MS = 30_000L;
 	private static final int MAX_ENTRIES = 256;
-	private static final int LINE_HEIGHT = 14;
+	private static final int STRING_GAP = 15;   // Ground Items' per-row vertical gap
+	private static final int OFFSET_Z = 20;     // Ground Items' text height offset
+	private static final int GAP_PX = 5;        // gap between the item's line and our appended rate
+	private static final int COINS_ID = 995;
 
 	private final Client client;
 	private final DropRateDisplayConfig config;
+	private final GroundItemsReader groundItems;
+	private final ConfigManager configManager;
 
 	/** Guarded by its own monitor; mutated from loot events and read from the render thread. */
 	private final List<GroundRate> rates = new ArrayList<>();
 
-	private volatile boolean mergeMode;
-
 	@Inject
-	DropRateDisplayOverlay(Client client, DropRateDisplayConfig config)
+	DropRateDisplayOverlay(Client client, DropRateDisplayConfig config, GroundItemsReader groundItems,
+		ConfigManager configManager)
 	{
 		this.client = client;
 		this.config = config;
+		this.groundItems = groundItems;
+		this.configManager = configManager;
 		setPosition(OverlayPosition.DYNAMIC);
 		setLayer(OverlayLayer.ABOVE_SCENE);
 	}
 
-	void addGroundRate(WorldPoint point, String itemName, String rate)
+	void addGroundRate(WorldPoint point, int itemId, String itemName, String rate)
 	{
 		if (point == null || itemName == null || rate == null)
 		{
@@ -60,18 +72,12 @@ public class DropRateDisplayOverlay extends Overlay
 
 		synchronized (rates)
 		{
-			rates.add(new GroundRate(point, itemName, rate, System.currentTimeMillis() + EXPIRY_MS));
+			rates.add(new GroundRate(point, itemId, itemName, rate, System.currentTimeMillis() + EXPIRY_MS));
 			while (rates.size() > MAX_ENTRIES)
 			{
 				rates.remove(0);
 			}
 		}
-	}
-
-	/** When true, render only the rate (Ground Items is already drawing the item name). */
-	void setMergeMode(boolean mergeMode)
-	{
-		this.mergeMode = mergeMode;
 	}
 
 	void clear()
@@ -102,43 +108,137 @@ public class DropRateDisplayOverlay extends Overlay
 			snapshot = new ArrayList<>(rates);
 		}
 
-		final boolean merge = mergeMode;
+		final Map<WorldPoint, List<GroundItemInfo>> giItems =
+			config.mergeWithGroundItems() ? groundItems.itemsByTile() : java.util.Collections.emptyMap();
+		final String priceMode = giItems.isEmpty() ? null : priceDisplayMode();
+		final FontMetrics fm = graphics.getFontMetrics();
+		final Map<WorldPoint, Integer> fallbackStack = new HashMap<>();
 
-		// Stack multiple entries on the same tile so they don't overwrite each other.
-		final Map<WorldPoint, Integer> perTileCount = new HashMap<>();
 		for (GroundRate rate : snapshot)
 		{
-			LocalPoint localPoint = LocalPoint.fromWorld(client, rate.point);
+			final LocalPoint localPoint = LocalPoint.fromWorld(client, rate.point);
 			if (localPoint == null)
 			{
 				continue;
 			}
 
-			String display = merge ? rate.rate : rate.itemName + " (" + rate.rate + ")";
-			Point textLocation = Perspective.getCanvasTextLocation(client, graphics, localPoint, display, 0);
-			if (textLocation == null)
+			final List<GroundItemInfo> tileItems = giItems.get(rate.point);
+			if (tileItems != null && renderMerged(graphics, localPoint, rate, tileItems, priceMode, fm))
 			{
 				continue;
 			}
 
-			int index = perTileCount.merge(rate.point, 1, Integer::sum) - 1;
-			Point stacked = new Point(textLocation.getX(), textLocation.getY() - index * LINE_HEIGHT);
-			OverlayUtil.renderTextLocation(graphics, stacked, display, config.rateColor());
+			// Fallback: Ground Items isn't drawing this (disabled / despawned / unavailable) — self-label it.
+			final String text = rate.itemName + " (" + rate.rate + ")";
+			final Point point = Perspective.getCanvasTextLocation(client, graphics, localPoint, text, OFFSET_Z);
+			if (point == null)
+			{
+				continue;
+			}
+			final int offset = fallbackStack.merge(rate.point, 1, Integer::sum) - 1;
+			drawRate(graphics, point.getX(), point.getY() - STRING_GAP * offset, text);
 		}
 
 		return null;
 	}
 
+	/** Appends the rate after this item's Ground Items line, on the same row. Returns false if not found. */
+	private boolean renderMerged(Graphics2D graphics, LocalPoint localPoint, GroundRate rate,
+		List<GroundItemInfo> tileItems, String priceMode, FontMetrics fm)
+	{
+		int offset = -1;
+		GroundItemInfo info = null;
+		for (int i = 0; i < tileItems.size(); i++)
+		{
+			if (tileItems.get(i).itemId == rate.itemId)
+			{
+				offset = i;
+				info = tileItems.get(i);
+				break;
+			}
+		}
+
+		if (info == null)
+		{
+			return false;
+		}
+
+		final String line = buildItemString(info, priceMode);
+		final Point point = Perspective.getCanvasTextLocation(client, graphics, localPoint, line, OFFSET_Z);
+		if (point == null)
+		{
+			return false;
+		}
+
+		final int x = point.getX() + fm.stringWidth(line) + GAP_PX;
+		final int y = point.getY() - STRING_GAP * offset;
+		drawRate(graphics, x, y, rate.rate);
+		return true;
+	}
+
+	private void drawRate(Graphics2D graphics, int x, int y, String text)
+	{
+		final TextComponent component = new TextComponent();
+		component.setText(text);
+		component.setColor(config.rateColor());
+		component.setOutline(true);
+		component.setPosition(x, y);
+		component.render(graphics);
+	}
+
+	private String priceDisplayMode()
+	{
+		final String mode = configManager.getConfiguration("grounditems", "priceDisplayMode");
+		return mode == null ? "BOTH" : mode; // Ground Items' default is BOTH
+	}
+
+	/** Reconstructs the text Ground Items draws for an item, so we know where its line ends. */
+	private String buildItemString(GroundItemInfo info, String priceMode)
+	{
+		final StringBuilder sb = new StringBuilder(info.name);
+		if (info.quantity > 1)
+		{
+			sb.append(" (").append(QuantityFormatter.quantityToStackSize(info.quantity)).append(')');
+		}
+
+		if (info.itemId != COINS_ID && priceMode != null && !"OFF".equals(priceMode))
+		{
+			if ("BOTH".equals(priceMode))
+			{
+				if (info.gePrice > 0)
+				{
+					sb.append(" (GE: ").append(QuantityFormatter.quantityToStackSize(info.gePrice)).append(" gp)");
+				}
+				if (info.haPrice > 0)
+				{
+					sb.append(" (HA: ").append(QuantityFormatter.quantityToStackSize(info.haPrice)).append(" gp)");
+				}
+			}
+			else
+			{
+				final int price = "GE".equals(priceMode) ? info.gePrice : info.haPrice;
+				if (price > 0)
+				{
+					sb.append(" (").append(QuantityFormatter.quantityToStackSize(price)).append(" gp)");
+				}
+			}
+		}
+
+		return sb.toString();
+	}
+
 	private static final class GroundRate
 	{
 		private final WorldPoint point;
+		private final int itemId;
 		private final String itemName;
 		private final String rate;
 		private final long expiresAt;
 
-		private GroundRate(WorldPoint point, String itemName, String rate, long expiresAt)
+		private GroundRate(WorldPoint point, int itemId, String itemName, String rate, long expiresAt)
 		{
 			this.point = point;
+			this.itemId = itemId;
 			this.itemName = itemName;
 			this.rate = rate;
 			this.expiresAt = expiresAt;
