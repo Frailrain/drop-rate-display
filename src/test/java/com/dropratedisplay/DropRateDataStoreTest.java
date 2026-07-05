@@ -82,4 +82,16 @@ public class DropRateDataStoreTest
 		assertEquals("1/25.6", entry.getRate());
 		assertNull(store.getSource("Martial salvage").getNpcIds());
 	}
+
+	@Test
+	public void bundledResourceLoadsAndIsQueryable()
+	{
+		DropRateDataStore bundled = new DropRateDataStore(new Gson());
+		bundled.load();
+		assertTrue("bundled drop_rates.json should contain many sources", bundled.getSourceCount() > 100);
+
+		DropRateEntry whip = bundled.lookup("Abyssal demon", "Abyssal whip");
+		assertNotNull("bundled data should contain Abyssal demon / Abyssal whip", whip);
+		assertEquals("1/512", whip.getRate());
+	}
 }

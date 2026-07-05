@@ -44,20 +44,34 @@ ROWS_PER_REQUEST = 500
 REQUEST_DELAY = 1.0  # seconds between requests
 
 
-def fetch_bucket(query):
-    """Runs one Bucket query and returns the list of result rows (under the 'bucket' key)."""
-    response = requests.get(
-        WIKI_API,
-        params={"action": "bucket", "format": "json", "query": query},
-        headers=HEADERS,
-        timeout=30,
-    )
-    response.raise_for_status()
-    payload = response.json()
-    if "error" in payload:
-        raise RuntimeError(f"Bucket API error for query [{query}]: {payload['error']}")
-    # Rows live under "bucket"; fall back to other keys defensively.
-    return payload.get("bucket", payload.get("data", payload.get("rows", [])))
+def fetch_bucket(query, retries=4):
+    """Runs one Bucket query and returns the list of result rows (under the 'bucket' key).
+
+    Retries transient network/HTTP failures with backoff so a long unattended full scan is not
+    lost to a single blip. A Bucket 'error' in the payload is a query bug, not transient, so it
+    is raised immediately without retry.
+    """
+    last_error = None
+    for attempt in range(retries):
+        try:
+            response = requests.get(
+                WIKI_API,
+                params={"action": "bucket", "format": "json", "query": query},
+                headers=HEADERS,
+                timeout=30,
+            )
+            response.raise_for_status()
+            payload = response.json()
+            if "error" in payload:
+                raise RuntimeError(f"Bucket API error for query [{query}]: {payload['error']}")
+            # Rows live under "bucket"; fall back to other keys defensively.
+            return payload.get("bucket", payload.get("data", payload.get("rows", [])))
+        except requests.RequestException as exc:
+            last_error = exc
+            wait = 2 ** attempt
+            print(f"  request failed ({exc}); retry {attempt + 1}/{retries} in {wait}s", file=sys.stderr)
+            time.sleep(wait)
+    raise RuntimeError(f"Bucket query failed after {retries} attempts: {last_error}")
 
 
 def _escape(value):
