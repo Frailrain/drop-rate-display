@@ -14,7 +14,7 @@ import net.runelite.api.Client;
 import net.runelite.api.Item;
 import net.runelite.api.ItemContainer;
 import net.runelite.api.NPC;
-import net.runelite.api.WorldView;
+import net.runelite.api.Player;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.GameTick;
@@ -60,6 +60,38 @@ public class DropRateDisplayPlugin extends Plugin
 	private static final int TEMPOROSS_REGION = 12588;
 	private static final int GUARDIANS_OF_THE_RIFT_REGION = 14484;
 	private static final int WINTERTODT_REGION = 6461;
+
+	// World chests: a "looted" message plus the region identifies the chest; loot lands in the inventory.
+	private static final Pattern GRUBBY_CHEST_PATTERN =
+		Pattern.compile("You find treasure(?: and supplies|, supplies, and a weirdly coloured egg sac) within the chest\\.");
+	private static final Map<Integer, String> CHEST_REGIONS = new HashMap<>();
+
+	static
+	{
+		CHEST_REGIONS.put(5179, "Brimstone Chest");
+		CHEST_REGIONS.put(11573, "Crystal Chest");
+		CHEST_REGIONS.put(12093, "Larran's big chest");
+		CHEST_REGIONS.put(13113, "Larran's small chest");
+		CHEST_REGIONS.put(13151, "Elven Crystal Chest");
+		CHEST_REGIONS.put(5277, "Stone chest");
+		CHEST_REGIONS.put(10835, "Dorgesh-Kaan Chest");
+		CHEST_REGIONS.put(10834, "Dorgesh-Kaan Chest");
+		CHEST_REGIONS.put(7323, "Grubby Chest");
+		CHEST_REGIONS.put(8593, "Isle of Souls Chest");
+		CHEST_REGIONS.put(7827, "Dark Chest");
+		CHEST_REGIONS.put(13117, "Rogues' Chest");
+		CHEST_REGIONS.put(13156, "Chest (Ancient Vault)");
+		CHEST_REGIONS.put(12348, "Muddy Chest");
+		CHEST_REGIONS.put(5422, "Chest (Aldarin Villas)");
+		CHEST_REGIONS.put(6550, "Chest (Moon key)");
+		CHEST_REGIONS.put(5521, "Chest (Alchemist's signet)");
+		CHEST_REGIONS.put(12073, "Rusty chest");
+		CHEST_REGIONS.put(7470, "Rusty chest");
+		CHEST_REGIONS.put(6187, "Tarnished chest");
+		CHEST_REGIONS.put(6953, "Tarnished chest");
+		CHEST_REGIONS.put(7743, "Reinforced chest");
+		CHEST_REGIONS.put(8758, "Reinforced chest");
+	}
 
 	// Reward interfaces that hold their loot in a dedicated container: on load we read that container
 	// directly (source name resolved via the data store's overrides). Interface + container IDs mirror
@@ -234,7 +266,29 @@ public class DropRateDisplayPlugin extends Plugin
 				log.debug("[Drop Rate] minigame loot trigger -> '{}'", source);
 				beginPending(source);
 			}
+			return;
 		}
+
+		// World chests: the region identifies which chest was looted; the loot lands in the inventory.
+		if (isChestLootMessage(message))
+		{
+			String source = CHEST_REGIONS.get(playerRegion());
+			if (source != null)
+			{
+				log.debug("[Drop Rate] chest trigger -> '{}'", source);
+				beginPending(source);
+			}
+		}
+	}
+
+	private static boolean isChestLootMessage(String message)
+	{
+		return message.equals("You find some treasure in the chest!")
+			|| message.equals("You steal some loot from the chest.")
+			|| message.equals("You find treasure inside!")
+			|| message.equals("You take some loot from inside.")
+			|| message.startsWith("You open the chest and find")
+			|| GRUBBY_CHEST_PATTERN.matcher(message).matches();
 	}
 
 	@Subscribe
@@ -419,40 +473,30 @@ public class DropRateDisplayPlugin extends Plugin
 
 	private String minigameSourceForRegion()
 	{
-		if (inRegion(TEMPOROSS_REGION))
+		int region = playerRegion();
+		if (region == TEMPOROSS_REGION)
 		{
 			return "Tempoross";
 		}
-		if (inRegion(GUARDIANS_OF_THE_RIFT_REGION))
+		if (region == GUARDIANS_OF_THE_RIFT_REGION)
 		{
 			return "Guardians of the Rift";
 		}
-		if (inRegion(WINTERTODT_REGION))
+		if (region == WINTERTODT_REGION)
 		{
 			return "Wintertodt";
 		}
 		return null;
 	}
 
-	private boolean inRegion(int region)
+	private int playerRegion()
 	{
-		WorldView worldView = client.getTopLevelWorldView();
-		if (worldView == null)
+		Player player = client.getLocalPlayer();
+		if (player == null || player.getWorldLocation() == null)
 		{
-			return false;
+			return -1;
 		}
-		int[] regions = worldView.getMapRegions();
-		if (regions != null)
-		{
-			for (int loaded : regions)
-			{
-				if (loaded == region)
-				{
-					return true;
-				}
-			}
-		}
-		return false;
+		return player.getWorldLocation().getRegionID();
 	}
 
 	// --- Shared helpers ----------------------------------------------------------------------------

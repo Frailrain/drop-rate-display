@@ -109,7 +109,9 @@ public class DropRateDataStoreTest
 		String[] wiredSources = {
 			"Barrows", "Chambers of Xeric", "Theatre of Blood", "Tombs of Amascut",
 			"Lunar Chest", "Fortis Colosseum", "Fishing Trawler", "Drift Net",
-			"Tempoross", "Guardians of the Rift", "Wintertodt", "Reward casket (hard)"
+			"Tempoross", "Guardians of the Rift", "Wintertodt", "Reward casket (hard)",
+			"Brimstone Chest", "Crystal Chest", "Larran's big chest", "Elven Crystal Chest",
+			"Chest (Ancient Vault)", "Dark Chest", "Muddy Chest"
 		};
 		for (String source : wiredSources)
 		{
