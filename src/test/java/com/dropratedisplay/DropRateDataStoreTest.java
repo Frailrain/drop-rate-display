@@ -111,7 +111,9 @@ public class DropRateDataStoreTest
 			"Lunar Chest", "Fortis Colosseum", "Fishing Trawler", "Drift Net",
 			"Tempoross", "Guardians of the Rift", "Wintertodt", "Reward casket (hard)",
 			"Brimstone Chest", "Crystal Chest", "Larran's big chest", "Elven Crystal Chest",
-			"Chest (Ancient Vault)", "Dark Chest", "Muddy Chest"
+			"Chest (Ancient Vault)", "Dark Chest", "Muddy Chest",
+			"Casket", "Seed pack", "Spoils of war", "Supply crate (Mahogany Homes)",
+			"Herbiboar", "Unsired", "Intricate pouch", "Simple lockbox"
 		};
 		for (String source : wiredSources)
 		{

@@ -19,9 +19,11 @@ import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.ItemContainerChanged;
+import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.api.events.WidgetLoaded;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.gameval.InventoryID;
+import net.runelite.api.gameval.ItemID;
 import net.runelite.client.chat.ChatColorType;
 import net.runelite.client.chat.ChatMessageBuilder;
 import net.runelite.client.chat.ChatMessageManager;
@@ -55,8 +57,21 @@ public class DropRateDisplayPlugin extends Plugin
 	// so it works regardless of whether the chat message or the container change fires first.
 	private static final int MATCH_WINDOW_TICKS = 1;
 
-	// Skilling minigames announce loot then deposit it to the inventory; the region disambiguates which.
+	// Opened loot containers: most name their source after the item itself, so we default to the item
+	// name and only override where the wiki page differs. Triggering on any of these menu options and
+	// letting the data-store lookup self-filter keeps this open-ended without a giant item-id table.
 	private static final String FOUND_LOOT_MESSAGE = "You found some loot: ";
+	private static final String HERBIBOAR_MESSAGE = "You harvest herbs from the herbiboar, whereupon it escapes.";
+	private static final String UNSIRED_MESSAGE = "You place the Unsired into the Font of Consumption...";
+	private static final Map<Integer, String> OPENED_ITEM_SOURCES = new HashMap<>();
+
+	static
+	{
+		OPENED_ITEM_SOURCES.put(ItemID.SEEDBOX, "Seed pack");
+		OPENED_ITEM_SOURCES.put(ItemID.CONSTRUCTION_SUPPLY_CRATE, "Supply crate (Mahogany Homes)");
+		OPENED_ITEM_SOURCES.put(ItemID.SOUL_WARS_SPOILS, "Spoils of war");
+	}
+
 	private static final int TEMPOROSS_REGION = 12588;
 	private static final int GUARDIANS_OF_THE_RIFT_REGION = 14484;
 	private static final int WINTERTODT_REGION = 6461;
@@ -238,6 +253,17 @@ public class DropRateDisplayPlugin extends Plugin
 			return;
 		}
 
+		if (message.equals(HERBIBOAR_MESSAGE))
+		{
+			beginPending("Herbiboar");
+			return;
+		}
+		if (message.equals(UNSIRED_MESSAGE))
+		{
+			beginPending("Unsired");
+			return;
+		}
+
 		Matcher pickpocket = PICKPOCKET_PATTERN.matcher(message);
 		if (pickpocket.matches())
 		{
@@ -307,6 +333,32 @@ public class DropRateDisplayPlugin extends Plugin
 			source = lastClueTier != null ? "Reward casket (" + lastClueTier + ")" : "Reward casket";
 		}
 		processRewardContainer(source, reward.containerId);
+	}
+
+	@Subscribe
+	public void onMenuOptionClicked(MenuOptionClicked event)
+	{
+		if (!event.isItemOp())
+		{
+			return;
+		}
+
+		String option = event.getMenuOption();
+		if (!option.equals("Open") && !option.equals("Search") && !option.equals("Take") && !option.equals("Take-all"))
+		{
+			return;
+		}
+
+		// Opening a loot container deposits its contents to the inventory. Name the source after the item
+		// (overridden where the wiki page differs), then let the inventory diff + data lookup self-filter:
+		// non-loot items simply resolve to no drop table and show nothing.
+		int itemId = event.getItemId();
+		String source = OPENED_ITEM_SOURCES.get(itemId);
+		if (source == null)
+		{
+			source = itemManager.getItemComposition(itemId).getName();
+		}
+		beginPending(source);
 	}
 
 	@Subscribe
