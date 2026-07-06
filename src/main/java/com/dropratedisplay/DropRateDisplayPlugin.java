@@ -303,14 +303,13 @@ public class DropRateDisplayPlugin extends Plugin
 				continue;
 			}
 
-			String rate = RateParser.formatRate(entry.getRate());
 			if (config.showChatRates())
 			{
-				sendChatMessage(itemName, displaySource, rate);
+				sendChatMessage(itemName, displaySource, RateParser.formatRateFull(entry.getRate()));
 			}
 			if (config.showInventoryRates())
 			{
-				inventoryOverlay.addRate(itemId, rate);
+				inventoryOverlay.addRate(itemId, RateParser.formatRate(entry.getRate()));
 			}
 		}
 	}

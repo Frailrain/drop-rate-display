@@ -92,12 +92,23 @@ public class RateParserTest
 	}
 
 	@Test
-	public void formatSimplifiesToOneInN()
+	public void formatRoundsToWholeOneInN()
 	{
-		assertEquals("1/24.4", RateParser.formatRate("100/2,440"));
-		assertEquals("1/8.1", RateParser.formatRate("300/2440"));
-		assertEquals("1/42.7", RateParser.formatRate("3/128"));
+		assertEquals("1/24", RateParser.formatRate("100/2,440"));
+		assertEquals("1/8", RateParser.formatRate("300/2440"));
+		assertEquals("1/43", RateParser.formatRate("3/128"));
 		assertEquals("1/512", RateParser.formatRate("1/512"));
+		assertEquals("1/26", RateParser.formatRate("1/25.6"));
 		assertEquals("Always", RateParser.formatRate("Always"));
+	}
+
+	@Test
+	public void formatFullKeepsWikiFraction()
+	{
+		assertEquals("100/2,440", RateParser.formatRateFull("100/2,440"));
+		assertEquals("3/128", RateParser.formatRateFull("3/128"));
+		assertEquals("1/512", RateParser.formatRateFull("1/512"));
+		assertEquals("Always", RateParser.formatRateFull("Always"));
+		assertEquals("Rare", RateParser.formatRateFull("Rare"));
 	}
 }

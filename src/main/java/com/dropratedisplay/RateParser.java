@@ -116,8 +116,8 @@ public final class RateParser
 	}
 
 	/**
-	 * Formats a rate for display: returns the leading {@code numerator/denominator} fraction with any
-	 * footnote stripped, or the trimmed label as-is for qualitative rates.
+	 * Formats a rate for a compact overlay: normalises to a whole-number {@code 1/N} (so {@code 100/2,440}
+	 * reads as {@code 1/24}), keeps {@code Always}, and passes qualitative labels through.
 	 */
 	public static String formatRate(String rate)
 	{
@@ -156,15 +156,35 @@ public final class RateParser
 		return matcher.group(1) + "/" + matcher.group(2);
 	}
 
-	/** "1 in N": whole numbers grouped with commas ("2,448"), otherwise one decimal place ("24.4"). */
+	/** "1 in N", denominator rounded to a whole number and grouped with commas ("24", "2,448"). */
 	private static String formatOneInN(double n)
 	{
-		double rounded = Math.round(n * 10.0) / 10.0;
-		if (rounded == Math.floor(rounded))
+		return String.format(Locale.US, "%,d", Math.round(n));
+	}
+
+	/**
+	 * The rate exactly as the wiki records it — footnote stripped but NOT simplified. Used for chat,
+	 * where there is room for the precise fraction (e.g. {@code 100/2,440}).
+	 */
+	public static String formatRateFull(String rate)
+	{
+		if (rate == null)
 		{
-			return String.format(Locale.US, "%,d", (long) rounded);
+			return "";
 		}
-		return String.format(Locale.US, "%.1f", rounded);
+
+		String trimmed = rate.trim();
+		if (isAlways(trimmed))
+		{
+			return "Always";
+		}
+
+		Matcher matcher = FRACTION.matcher(trimmed);
+		if (matcher.find())
+		{
+			return matcher.group(1) + "/" + matcher.group(2);
+		}
+		return trimmed;
 	}
 
 	private static String stripCommas(String number)

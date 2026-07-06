@@ -147,7 +147,7 @@ public class DropRateDisplayPluginTest
 		plugin.handleInventoryChange(itemMap(RUNE_FULL_HELM_ID, 1));
 
 		verify(chatMessageManager).queue(any());
-		verify(inventoryOverlay).addRate(eq(RUNE_FULL_HELM_ID), eq("1/25.6"));
+		verify(inventoryOverlay).addRate(eq(RUNE_FULL_HELM_ID), eq("1/26"));
 	}
 
 	/** The ordering that broke the old snapshot-at-trigger code: item arrives before the trigger. */
@@ -157,7 +157,7 @@ public class DropRateDisplayPluginTest
 		plugin.handleInventoryChange(itemMap(RUNE_FULL_HELM_ID, 1));
 		plugin.beginPending("Martial salvage");
 
-		verify(inventoryOverlay).addRate(eq(RUNE_FULL_HELM_ID), eq("1/25.6"));
+		verify(inventoryOverlay).addRate(eq(RUNE_FULL_HELM_ID), eq("1/26"));
 	}
 
 	/** An inventory change with no matching source trigger must not emit anything. */
