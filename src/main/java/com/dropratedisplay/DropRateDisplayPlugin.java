@@ -67,6 +67,9 @@ public class DropRateDisplayPlugin extends Plugin
 	DropRateDisplayOverlay overlay;
 
 	@Inject
+	RewardInterfaceOverlay rewardOverlay;
+
+	@Inject
 	private OverlayManager overlayManager;
 
 	@Inject
@@ -90,6 +93,7 @@ public class DropRateDisplayPlugin extends Plugin
 	{
 		dataStore.load();
 		overlayManager.add(overlay);
+		overlayManager.add(rewardOverlay);
 		resetPending();
 		log.debug("Drop Rate Display started ({} sources)", dataStore.getSourceCount());
 	}
@@ -98,6 +102,7 @@ public class DropRateDisplayPlugin extends Plugin
 	protected void shutDown()
 	{
 		overlayManager.remove(overlay);
+		overlayManager.remove(rewardOverlay);
 		overlay.clear();
 		resetPending();
 	}
@@ -189,6 +194,8 @@ public class DropRateDisplayPlugin extends Plugin
 		{
 			beginPending(lastClueTier != null ? "Reward casket (" + lastClueTier + ")" : "Reward casket");
 		}
+		// The Perilous Moons "Lunar Chest" reward is drawn directly over its reward interface by
+		// RewardInterfaceOverlay, so it deliberately has no chat trigger here.
 	}
 
 	@Subscribe
@@ -262,19 +269,7 @@ public class DropRateDisplayPlugin extends Plugin
 	 */
 	private boolean shouldDisplay(String rate)
 	{
-		if (rate == null || rate.trim().isEmpty() || RateParser.isAlways(rate))
-		{
-			return false;
-		}
-
-		double denominator = RateParser.parseDenominator(rate);
-		if (denominator > 0)
-		{
-			int minimum = config.minimumRarity();
-			return minimum <= 0 || denominator >= minimum;
-		}
-
-		return RateParser.isQualitative(rate) && config.showQualitativeRates();
+		return RateParser.shouldDisplay(rate, config.minimumRarity(), config.showQualitativeRates());
 	}
 
 	private void sendChatMessage(String itemName, String source, String rate)

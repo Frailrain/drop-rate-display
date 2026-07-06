@@ -33,10 +33,21 @@ public interface DropRateDisplayConfig extends Config
 	}
 
 	@ConfigItem(
+		keyName = "showRewardInterfaceRates",
+		name = "Show rates on reward interfaces",
+		description = "Draw drop rates over the items shown on reward screens such as the Lunar Chest",
+		position = 3
+	)
+	default boolean showRewardInterfaceRates()
+	{
+		return true;
+	}
+
+	@ConfigItem(
 		keyName = "minimumRarity",
 		name = "Minimum rarity to display",
 		description = "Only show rates for items rarer than this (e.g. 25 means 1/25 or rarer). Set to 0 to show all.",
-		position = 3
+		position = 4
 	)
 	default int minimumRarity()
 	{
@@ -46,8 +57,8 @@ public interface DropRateDisplayConfig extends Config
 	@ConfigItem(
 		keyName = "rateColor",
 		name = "Rate text colour",
-		description = "Colour of the drop rate text drawn on ground items",
-		position = 4
+		description = "Colour of the drop rate text drawn on ground items and reward interfaces",
+		position = 5
 	)
 	default Color rateColor()
 	{
@@ -58,7 +69,7 @@ public interface DropRateDisplayConfig extends Config
 		keyName = "showQualitativeRates",
 		name = "Show qualitative rates",
 		description = "Display 'Uncommon', 'Rare' etc. when the exact rate is unknown",
-		position = 5
+		position = 6
 	)
 	default boolean showQualitativeRates()
 	{

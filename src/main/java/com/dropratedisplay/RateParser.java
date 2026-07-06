@@ -115,6 +115,27 @@ public final class RateParser
 	}
 
 	/**
+	 * Whether a rate should be shown given the user's filters: never for guaranteed drops; numeric rates
+	 * gated by {@code minimumRarity} ({@code <= 0} shows every numeric rate); qualitative labels only when
+	 * {@code showQualitative} is set.
+	 */
+	public static boolean shouldDisplay(String rate, int minimumRarity, boolean showQualitative)
+	{
+		if (rate == null || rate.trim().isEmpty() || isAlways(rate))
+		{
+			return false;
+		}
+
+		double denominator = parseDenominator(rate);
+		if (denominator > 0)
+		{
+			return minimumRarity <= 0 || denominator >= minimumRarity;
+		}
+
+		return isQualitative(rate) && showQualitative;
+	}
+
+	/**
 	 * Formats a rate for display: returns the leading {@code numerator/denominator} fraction with any
 	 * footnote stripped, or the trimmed label as-is for qualitative rates.
 	 */
