@@ -144,7 +144,7 @@ public class DropRateDisplayOverlay extends Overlay
 				continue;
 			}
 			final int offset = fallbackStack.merge(rate.point, 1, Integer::sum) - 1;
-			drawRate(graphics, point.getX(), point.getY() - STRING_GAP * offset, text);
+			drawRate(graphics, point.getX(), point.getY() - STRING_GAP * offset, text, rate.rate);
 		}
 
 		return null;
@@ -180,14 +180,14 @@ public class DropRateDisplayOverlay extends Overlay
 
 		final int x = point.getX() + fm.stringWidth(line) + GAP_PX;
 		final int y = point.getY() - STRING_GAP * offset;
-		drawRate(graphics, x, y, rate.rate);
+		drawRate(graphics, x, y, rate.rate, rate.rate);
 	}
 
-	private void drawRate(Graphics2D graphics, int x, int y, String text)
+	private void drawRate(Graphics2D graphics, int x, int y, String text, String rateForColour)
 	{
 		final TextComponent component = new TextComponent();
 		component.setText(text);
-		component.setColor(config.rateColor());
+		component.setColor(RarityColor.resolve(rateForColour, config.rateColor(), config.colourByRarity()));
 		component.setOutline(true);
 		component.setPosition(x, y);
 		component.render(graphics);

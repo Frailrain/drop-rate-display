@@ -66,10 +66,33 @@ public interface DropRateDisplayConfig extends Config
 	}
 
 	@ConfigItem(
+		keyName = "rateFormat",
+		name = "Rate format",
+		description = "How rates are written. Exact: 100/2,440. 1 in X: 1/24.4 (as on the wiki). "
+			+ "1 in X (rounded): 1/24.",
+		position = 6
+	)
+	default RateFormat rateFormat()
+	{
+		return RateFormat.ONE_IN_X;
+	}
+
+	@ConfigItem(
+		keyName = "colourByRarity",
+		name = "Colour by rarity",
+		description = "Colour the rate by how rare it is: yellow (common), green, purple, then red (ultra-rare)",
+		position = 7
+	)
+	default boolean colourByRarity()
+	{
+		return true;
+	}
+
+	@ConfigItem(
 		keyName = "rateColor",
 		name = "Rate text colour",
-		description = "Colour of the drop rate text drawn on items",
-		position = 6
+		description = "Rate text colour when 'Colour by rarity' is off (and the fallback for un-ranked rates)",
+		position = 8
 	)
 	default Color rateColor()
 	{
@@ -80,7 +103,7 @@ public interface DropRateDisplayConfig extends Config
 		keyName = "showQualitativeRates",
 		name = "Show qualitative rates",
 		description = "Display 'Uncommon', 'Rare' etc. when the exact rate is unknown",
-		position = 7
+		position = 9
 	)
 	default boolean showQualitativeRates()
 	{
@@ -91,7 +114,7 @@ public interface DropRateDisplayConfig extends Config
 		keyName = "showGuaranteedDrops",
 		name = "Show guaranteed drops",
 		description = "Also show 'Always' for 100% drops such as bones and ashes",
-		position = 8
+		position = 10
 	)
 	default boolean showGuaranteedDrops()
 	{
@@ -103,7 +126,7 @@ public interface DropRateDisplayConfig extends Config
 		name = "Merge with Ground Items",
 		description = "When the Ground Items plugin is enabled, append the rate to each item's line instead "
 			+ "of drawing a separate labelled line",
-		position = 9
+		position = 11
 	)
 	default boolean mergeWithGroundItems()
 	{

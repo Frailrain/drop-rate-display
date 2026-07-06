@@ -71,7 +71,7 @@ public class DropRateInventoryOverlay extends WidgetItemOverlay
 
 		TextComponent text = new TextComponent();
 		text.setText(rate.rate);
-		text.setColor(config.rateColor());
+		text.setColor(RarityColor.resolve(rate.rate, config.rateColor(), config.colourByRarity()));
 		text.setOutline(true);
 		// Bottom-left of the slot, clear of the top-left quantity numbers.
 		text.setPosition(bounds.x - 1, bounds.y + bounds.height - 1);

@@ -111,4 +111,14 @@ public class RateParserTest
 		assertEquals("Always", RateParser.formatRateFull("Always"));
 		assertEquals("Rare", RateParser.formatRateFull("Rare"));
 	}
+
+	@Test
+	public void formatDispatchesByRateFormat()
+	{
+		assertEquals("100/2,440", RateParser.format("100/2,440", RateFormat.EXACT));
+		assertEquals("1/24.4", RateParser.format("100/2,440", RateFormat.ONE_IN_X));
+		assertEquals("1/24", RateParser.format("100/2,440", RateFormat.ONE_IN_X_ROUNDED));
+		assertEquals("1/512", RateParser.format("1/512", RateFormat.ONE_IN_X)); // whole -> no ".0"
+		assertEquals("Always", RateParser.format("Always", RateFormat.ONE_IN_X));
+	}
 }

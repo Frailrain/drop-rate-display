@@ -140,11 +140,28 @@ public final class RateParser
 		return isQualitative(rate) && showQualitative;
 	}
 
-	/**
-	 * Formats a rate for a compact overlay: normalises to a whole-number {@code 1/N} (so {@code 100/2,440}
-	 * reads as {@code 1/24}), keeps {@code Always}, and passes qualitative labels through.
-	 */
+	/** Formats a rate for display in the user's chosen {@link RateFormat}. */
+	public static String format(String rate, RateFormat format)
+	{
+		if (format == RateFormat.EXACT)
+		{
+			return formatRateFull(rate);
+		}
+		return oneInN(rate, format != RateFormat.ONE_IN_X);
+	}
+
+	/** Compact overlay format: rounded "1 in N" (so {@code 100/2,440} reads as {@code 1/24}). */
 	public static String formatRate(String rate)
+	{
+		return oneInN(rate, true);
+	}
+
+	/**
+	 * Normalises a rate to "1 in N": {@code rounded} gives a whole number ({@code 1/24}), otherwise one
+	 * decimal place as the wiki renders it ({@code 1/24.4}). {@code Always} and qualitative labels pass
+	 * through unchanged.
+	 */
+	private static String oneInN(String rate, boolean rounded)
 	{
 		if (rate == null)
 		{
@@ -169,8 +186,15 @@ public final class RateParser
 			double denominator = Double.parseDouble(stripCommas(matcher.group(2)));
 			if (numerator > 0 && denominator > 0)
 			{
-				// Normalise to "1 in N" so unwieldy wiki fractions like 100/2,440 read as 1/24.4.
-				return "1/" + formatOneInN(denominator / numerator);
+				double n = denominator / numerator;
+				if (rounded)
+				{
+					return "1/" + String.format(Locale.US, "%,d", Math.round(n));
+				}
+				double oneDecimal = Math.round(n * 10.0) / 10.0;
+				return "1/" + (oneDecimal == Math.floor(oneDecimal)
+					? String.format(Locale.US, "%,d", (long) oneDecimal)
+					: String.format(Locale.US, "%.1f", oneDecimal));
 			}
 		}
 		catch (NumberFormatException ignored)
@@ -179,12 +203,6 @@ public final class RateParser
 		}
 
 		return matcher.group(1) + "/" + matcher.group(2);
-	}
-
-	/** "1 in N", denominator rounded to a whole number and grouped with commas ("24", "2,448"). */
-	private static String formatOneInN(double n)
-	{
-		return String.format(Locale.US, "%,d", Math.round(n));
 	}
 
 	/**
