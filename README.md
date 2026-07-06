@@ -1,47 +1,56 @@
 # Drop Rate Display
 
-A [RuneLite](https://runelite.net) plugin that shows the drop rate of loot you receive, sourced from
-the [OSRS Wiki](https://oldschool.runescape.wiki).
+A [RuneLite](https://runelite.net) plugin that shows the OSRS Wiki drop rate of loot you receive,
+wherever it appears — on the ground, on a reward screen, or in your inventory.
 
-- **Monster drops** — the rate is drawn on the ground where the monster died, next to the item.
-  Example: `Abyssal whip (1/512)`
-- **Pickpocket, salvage and chest loot** — the rate is printed in chat.
-  Example: `[Drop Rate] Dharok's helm from Barrows: 1/2,448`
+There is **no dependency on the Loot Tracker plugin**. Monster drops come from RuneLite's core
+`LootManager`; everything else is detected directly from game messages, reward interfaces and menu
+actions.
 
-There is **no dependency on the Loot Tracker plugin** — monster drops are detected through RuneLite's
-core `LootManager`, and other loot is detected directly from game messages and reward interfaces.
+## Where the rate shows
 
-## Features
+- **Floor drops** (monsters and bosses) — the rate is drawn on the ground next to the item. When the
+  core **Ground Items** plugin is on, it's appended to that item's line (`Feather (5) (GE: 10 gp) 1/2`);
+  otherwise it's shown self-labelled (`Ensouled goblin head (1/35)`).
+- **Reward screens** — the rate is painted directly on each item on the reward interface: Barrows,
+  Chambers of Xeric, Theatre of Blood, Tombs of Amascut, Perilous Moons (Lunar Chest), Fortis Colosseum,
+  Fishing Trawler, Drift Net and clue caskets.
+- **Inventory loot** — a chat line plus the rate on the item's icon for ~30 seconds. Covers:
+  - Pickpockets and ship salvage
+  - World chests — Brimstone, Crystal, Larran's, Elven, Grubby, Muddy, Ancient Vault, and more
+  - Opened containers — caskets, lockboxes, gem bags, Camdozaal/frozen caches, potion packs, the
+    Mahogany Homes supply crate, Soul Wars spoils, seed packs, and any other item whose name has a
+    wiki drop table
+  - Skilling minigames — Tempoross, Guardians of the Rift, Wintertodt
+  - Herbiboar and the Unsired
 
-| Loot source | How it's detected | Where the rate shows |
-|---|---|---|
-| Monster kills | `NpcLootReceived` (core `LootManager`) | On the ground item |
-| Pickpockets | Game message + inventory diff | Chat |
-| Ship salvage | Game message + inventory diff | Chat |
-| Barrows chest | Reward widget + inventory diff | Chat |
-| Clue caskets | Reward widget + inventory diff | Chat |
+Rates read from the wiki (`1/512`, `100/2,440`, `Always`, `Uncommon`). On the roomy ground line and in
+chat the full wiki rate is shown; on the space-constrained item icons it's normalised to a rounded
+`1/N` (`100/2,440` → `1/24`).
 
 ## Configuration
 
-- **Show rates on ground items** — toggle the ground overlay.
-- **Show rates in chat** — toggle chat messages for inventory-received loot.
-- **Minimum rarity to display** — only show rates for items `1/N` or rarer (default `10`; `0` shows all).
-- **Rate text colour** — colour of the ground overlay text.
+- **Show rates on ground items** — the ground overlay for monster drops.
+- **Show rates in chat** — chat lines for inventory-received loot.
+- **Show rates on inventory items** — the ~30s rate on a received item's icon.
+- **Show rates on reward interfaces** — draw rates over reward-screen items.
+- **Minimum rarity to display** — only show items `1/N` or rarer (default `10`; `0` shows everything).
+- **Rate text colour** — colour of the drawn rate text.
 - **Show qualitative rates** — also show `Uncommon` / `Rare` etc. when an exact rate is unknown.
+- **Show guaranteed drops** — also show `Always` for 100% drops (bones, ashes…).
+- **Merge with Ground Items** — append to each Ground Items line instead of a separate labelled line.
 
 ## Data
 
-Drop rates are bundled in [`src/main/resources/drop_rates.json`](src/main/resources/drop_rates.json),
-generated from the OSRS Wiki's `dropsline` Bucket. Because the wiki does not expose numeric item ids in
-its drop data, the file is keyed by item **name**, and the plugin resolves an `ItemStack`'s id to a name
-at runtime via `ItemManager`.
-
-Rates are stored exactly as the wiki displays them (`1/512`, `1/25.6`, `Always`, `Uncommon`) — they are
-never converted to decimals.
+Drop rates are bundled in [`src/main/resources/drop_rates.json`](src/main/resources/drop_rates.json)
+(~2,000 sources, ~34,000 drops), generated from the OSRS Wiki's `dropsline` Bucket. The wiki does not
+expose numeric item ids in its drop data, so the file is keyed by item **name** and the plugin resolves
+an item id to a name at runtime via `ItemManager`. Activity names are mapped to their real wiki page
+(e.g. Chambers of Xeric → `Ancient chest`, Wintertodt → `Reward Cart`).
 
 ### Regenerating the data
 
-[`scripts/generate_drop_rates.py`](scripts/generate_drop_rates.py) rebuilds the bundled file. It respects
+[`scripts/generate_drop_rates.py`](scripts/generate_drop_rates.py) rebuilds the bundled file, respecting
 the wiki's 1 request/second courtesy limit.
 
 ```sh
@@ -55,25 +64,22 @@ python scripts/generate_drop_rates.py --sources "Abyssal demon,Vorkath,Chest (Ba
 python scripts/generate_drop_rates.py --full -o src/main/resources/drop_rates.json
 ```
 
-The bundled sample covers a representative set of sources; run a `--full` rebuild for complete coverage.
-
 ## Building
 
 ```sh
-./gradlew build      # compile + run tests
+./gradlew build      # compile + run the tests
 ./gradlew run        # launch a RuneLite dev client with the plugin loaded
 ```
 
 Requires JDK 11.
 
-## Known limitations (v1)
+## Known limitations
 
-- Chest/clue detection relies on the loot landing in your inventory; a full bank-bound reward is not
-  captured.
-- Same-named NPC variants with different drop tables are matched by name. NPC ids are bundled for future
-  id-based disambiguation.
 - Coverage is limited to what the wiki's `dropsline` template records (it excludes, e.g., bird-nest seed
-  sub-tables and skilling success rates).
+  sub-tables and skilling success rates). Point/ticket shops (Mahogany Homes points, Soul Wars, Castle
+  Wars) are intentionally out of scope — their supplies are bought, not random loot.
+- Same-named NPC variants with different drop tables are matched by name; NPC ids are bundled for future
+  id-based disambiguation.
 
 ## Licence
 
