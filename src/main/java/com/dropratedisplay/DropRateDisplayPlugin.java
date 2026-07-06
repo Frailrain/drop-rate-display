@@ -1,7 +1,9 @@
 package com.dropratedisplay;
 
 import com.google.inject.Provides;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -12,6 +14,7 @@ import net.runelite.api.Client;
 import net.runelite.api.Item;
 import net.runelite.api.ItemContainer;
 import net.runelite.api.NPC;
+import net.runelite.api.WorldView;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.GameTick;
@@ -52,6 +55,30 @@ public class DropRateDisplayPlugin extends Plugin
 	// so it works regardless of whether the chat message or the container change fires first.
 	private static final int MATCH_WINDOW_TICKS = 1;
 
+	// Skilling minigames announce loot then deposit it to the inventory; the region disambiguates which.
+	private static final String FOUND_LOOT_MESSAGE = "You found some loot: ";
+	private static final int TEMPOROSS_REGION = 12588;
+	private static final int GUARDIANS_OF_THE_RIFT_REGION = 14484;
+	private static final int WINTERTODT_REGION = 6461;
+
+	// Reward interfaces that hold their loot in a dedicated container: on load we read that container
+	// directly (source name resolved via the data store's overrides). Interface + container IDs mirror
+	// how RuneLite's own Loot Tracker reads them, using core gameval constants (no runtime dependency).
+	private static final Map<Integer, RewardInterface> REWARD_INTERFACES = new HashMap<>();
+
+	static
+	{
+		REWARD_INTERFACES.put(InterfaceID.BARROWS_REWARD, new RewardInterface("Barrows", InventoryID.TRAIL_REWARDINV));
+		REWARD_INTERFACES.put(InterfaceID.TRAIL_REWARDSCREEN, new RewardInterface(null, InventoryID.TRAIL_REWARDINV));
+		REWARD_INTERFACES.put(InterfaceID.RAIDS_REWARDS, new RewardInterface("Chambers of Xeric", InventoryID.RAIDS_REWARDS));
+		REWARD_INTERFACES.put(InterfaceID.TOB_CHESTS, new RewardInterface("Theatre of Blood", InventoryID.TOB_CHESTS));
+		REWARD_INTERFACES.put(InterfaceID.TOA_CHESTS, new RewardInterface("Tombs of Amascut", InventoryID.TOA_CHESTS));
+		REWARD_INTERFACES.put(InterfaceID.PMOON_REWARD, new RewardInterface("Lunar Chest", InventoryID.PMOON_REWARDINV));
+		REWARD_INTERFACES.put(InterfaceID.COLOSSEUM_REWARD_CHEST_2, new RewardInterface("Fortis Colosseum", InventoryID.COLOSSEUM_REWARDS));
+		REWARD_INTERFACES.put(InterfaceID.TRAWLER_REWARD, new RewardInterface("Fishing Trawler", InventoryID.TRAWLER_REWARDINV));
+		REWARD_INTERFACES.put(InterfaceID.FOSSIL_DRIFTNET, new RewardInterface("Drift Net", InventoryID.MACRO_CERTER));
+	}
+
 	@Inject
 	Client client;
 
@@ -85,6 +112,9 @@ public class DropRateDisplayPlugin extends Plugin
 	private String pendingSource;
 	private int pendingTick = Integer.MIN_VALUE;
 	private String lastClueTier;
+
+	// Last item set read from each reward container, so a re-fired reward interface is not re-announced.
+	private final Map<Integer, List<Integer>> lastRewardItems = new HashMap<>();
 
 	@Provides
 	DropRateDisplayConfig provideConfig(ConfigManager configManager)
@@ -194,25 +224,35 @@ public class DropRateDisplayPlugin extends Plugin
 			return;
 		}
 
-		// Diagnostic: surface any salvage-related message that did not match, so the pattern can be fixed.
-		if (log.isDebugEnabled() && message.toLowerCase().contains("salvage"))
+		// Skilling minigames (Tempoross / Guardians of the Rift / Wintertodt) announce loot with a common
+		// message then deposit it to the inventory; the region tells us which activity it is.
+		if (message.contains(FOUND_LOOT_MESSAGE))
 		{
-			log.debug("[Drop Rate] unmatched salvage-ish message: '{}'", message);
+			String source = minigameSourceForRegion();
+			if (source != null)
+			{
+				log.debug("[Drop Rate] minigame loot trigger -> '{}'", source);
+				beginPending(source);
+			}
 		}
 	}
 
 	@Subscribe
 	public void onWidgetLoaded(WidgetLoaded event)
 	{
-		int group = event.getGroupId();
-		if (group == InterfaceID.BARROWS_REWARD)
+		RewardInterface reward = REWARD_INTERFACES.get(event.getGroupId());
+		if (reward == null)
 		{
-			beginPending("Barrows");
+			return;
 		}
-		else if (group == InterfaceID.TRAIL_REWARDSCREEN)
+
+		String source = reward.source;
+		if (source == null)
 		{
-			beginPending(lastClueTier != null ? "Reward casket (" + lastClueTier + ")" : "Reward casket");
+			// Clue casket: name the source from the most recently completed clue tier.
+			source = lastClueTier != null ? "Reward casket (" + lastClueTier + ")" : "Reward casket";
 		}
+		processRewardContainer(source, reward.containerId);
 	}
 
 	@Subscribe
@@ -316,6 +356,105 @@ public class DropRateDisplayPlugin extends Plugin
 		}
 	}
 
+	/** Reads a reward interface's own item container (raids, Barrows, Moons, etc.) and shows its rates. */
+	private void processRewardContainer(String source, int containerId)
+	{
+		if (!config.showChatRates() && !config.showInventoryRates())
+		{
+			return;
+		}
+
+		SourceDropTable table = dataStore.getSource(source);
+		if (table == null)
+		{
+			log.debug("[Drop Rate] no drop table for reward source '{}'", source);
+			return;
+		}
+
+		ItemContainer container = client.getItemContainer(containerId);
+		if (container == null)
+		{
+			return;
+		}
+
+		List<Integer> itemIds = new ArrayList<>();
+		for (Item item : container.getItems())
+		{
+			if (item.getId() >= 0)
+			{
+				itemIds.add(item.getId());
+			}
+		}
+		// Reward interfaces can re-fire their WidgetLoaded; only act when the contents actually change.
+		if (itemIds.isEmpty() || itemIds.equals(lastRewardItems.get(containerId)))
+		{
+			return;
+		}
+		lastRewardItems.put(containerId, itemIds);
+
+		String displaySource = table.getSourceName() != null ? table.getSourceName() : source;
+		for (Item item : container.getItems())
+		{
+			if (item.getId() < 0)
+			{
+				continue;
+			}
+			String itemName = itemManager.getItemComposition(item.getId()).getName();
+			DropRateEntry entry = table.getDrop(itemName);
+			if (entry == null || !shouldDisplay(entry.getRate()))
+			{
+				continue;
+			}
+
+			if (config.showChatRates())
+			{
+				sendChatMessage(itemName, displaySource, RateParser.formatRateFull(entry.getRate()));
+			}
+			if (config.showInventoryRates())
+			{
+				inventoryOverlay.addRate(item.getId(), RateParser.formatRate(entry.getRate()));
+			}
+		}
+	}
+
+	private String minigameSourceForRegion()
+	{
+		if (inRegion(TEMPOROSS_REGION))
+		{
+			return "Tempoross";
+		}
+		if (inRegion(GUARDIANS_OF_THE_RIFT_REGION))
+		{
+			return "Guardians of the Rift";
+		}
+		if (inRegion(WINTERTODT_REGION))
+		{
+			return "Wintertodt";
+		}
+		return null;
+	}
+
+	private boolean inRegion(int region)
+	{
+		WorldView worldView = client.getTopLevelWorldView();
+		if (worldView == null)
+		{
+			return false;
+		}
+		int[] regions = worldView.getMapRegions();
+		if (regions != null)
+		{
+			for (int loaded : regions)
+			{
+				if (loaded == region)
+				{
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
 	// --- Shared helpers ----------------------------------------------------------------------------
 
 	/**
@@ -388,5 +527,19 @@ public class DropRateDisplayPlugin extends Plugin
 		recentAdded = null;
 		lastClueTier = null;
 		inventorySnapshot = new HashMap<>();
+		lastRewardItems.clear();
+	}
+
+	/** A reward interface's source name (null = derive, e.g. clue caskets) and the container to read. */
+	private static final class RewardInterface
+	{
+		private final String source;
+		private final int containerId;
+
+		private RewardInterface(String source, int containerId)
+		{
+			this.source = source;
+			this.containerId = containerId;
+		}
 	}
 }

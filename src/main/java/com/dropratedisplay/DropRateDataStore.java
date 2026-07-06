@@ -36,13 +36,18 @@ public class DropRateDataStore
 
 	static
 	{
-		// Clue caskets: the completed-clue tier the plugin derives already matches the wiki
-		// "Reward casket (tier)" page name, so no override is needed there. Entries below cover
-		// activity names whose loot page differs from the loot event name.
+		// Activity/interface names (what the plugin derives from the reward interface or region) mapped to
+		// the wiki page the drop data actually lives on. Clue caskets need no entry: the derived
+		// "Reward casket (tier)" already matches the wiki page name. Verified against the bundled data.
 		SOURCE_NAME_OVERRIDES.put("Barrows", "Chest (Barrows)");
-		SOURCE_NAME_OVERRIDES.put("Theatre of Blood", "Theatre of Blood/Rewards");
-		SOURCE_NAME_OVERRIDES.put("Chambers of Xeric", "Chambers of Xeric/Rewards");
-		SOURCE_NAME_OVERRIDES.put("Tombs of Amascut", "Tombs of Amascut/Rewards");
+		SOURCE_NAME_OVERRIDES.put("Chambers of Xeric", "Ancient chest");
+		SOURCE_NAME_OVERRIDES.put("Theatre of Blood", "Monumental chest");
+		SOURCE_NAME_OVERRIDES.put("Tombs of Amascut", "Chest (Tombs of Amascut)");
+		SOURCE_NAME_OVERRIDES.put("Fortis Colosseum", "Rewards Chest (Fortis Colosseum)");
+		SOURCE_NAME_OVERRIDES.put("Drift Net", "Drift net fishing");
+		SOURCE_NAME_OVERRIDES.put("Tempoross", "Reward pool");
+		SOURCE_NAME_OVERRIDES.put("Wintertodt", "Reward Cart");
+		SOURCE_NAME_OVERRIDES.put("Guardians of the Rift", "Rewards Guardian");
 	}
 
 	private final Gson gson;
