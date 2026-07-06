@@ -6,7 +6,6 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import javax.inject.Inject;
 import javax.inject.Singleton;
-import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.widgets.WidgetItem;
 import net.runelite.client.ui.overlay.WidgetItemOverlay;
 import net.runelite.client.ui.overlay.components.TextComponent;
@@ -30,18 +29,9 @@ public class DropRateInventoryOverlay extends WidgetItemOverlay
 	DropRateInventoryOverlay(DropRateDisplayConfig config)
 	{
 		this.config = config;
+		// Inventory only: reward-interface pop-ups are handled by RewardInterfaceOverlay (drawn directly
+		// from the source table), so we do not also register the interfaces here and double-draw.
 		showOnInventory();
-		// Also draw over reward-chest pop-ups so rates show on the reward interface, not just the inventory.
-		showOnInterfaces(
-			InterfaceID.BARROWS_REWARD,
-			InterfaceID.TRAIL_REWARDSCREEN,
-			InterfaceID.RAIDS_REWARDS,
-			InterfaceID.TOB_CHESTS,
-			InterfaceID.TOA_CHESTS,
-			InterfaceID.PMOON_REWARD,
-			InterfaceID.COLOSSEUM_REWARD_CHEST_2,
-			InterfaceID.TRAWLER_REWARD,
-			InterfaceID.FOSSIL_DRIFTNET);
 	}
 
 	void addRate(int itemId, String rate)

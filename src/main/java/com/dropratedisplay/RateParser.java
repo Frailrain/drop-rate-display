@@ -116,6 +116,31 @@ public final class RateParser
 	}
 
 	/**
+	 * The shared display-filter predicate: guaranteed drops only when {@code showGuaranteed}; numeric rates
+	 * gated by {@code minimumRarity} ({@code <= 0} shows every numeric rate); qualitative labels only when
+	 * {@code showQualitative}. Used by the ground, chat, inventory and reward-interface paths alike.
+	 */
+	public static boolean shouldDisplay(String rate, int minimumRarity, boolean showQualitative, boolean showGuaranteed)
+	{
+		if (rate == null || rate.trim().isEmpty())
+		{
+			return false;
+		}
+		if (isAlways(rate))
+		{
+			return showGuaranteed;
+		}
+
+		double denominator = parseDenominator(rate);
+		if (denominator > 0)
+		{
+			return minimumRarity <= 0 || denominator >= minimumRarity;
+		}
+
+		return isQualitative(rate) && showQualitative;
+	}
+
+	/**
 	 * Formats a rate for a compact overlay: normalises to a whole-number {@code 1/N} (so {@code 100/2,440}
 	 * reads as {@code 1/24}), keeps {@code Always}, and passes qualitative labels through.
 	 */

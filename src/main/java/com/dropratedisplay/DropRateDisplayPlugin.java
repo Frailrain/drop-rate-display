@@ -1,9 +1,7 @@
 package com.dropratedisplay;
 
 import com.google.inject.Provides;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -20,8 +18,6 @@ import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.ItemContainerChanged;
 import net.runelite.api.events.MenuOptionClicked;
-import net.runelite.api.events.WidgetLoaded;
-import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.gameval.InventoryID;
 import net.runelite.api.gameval.ItemID;
 import net.runelite.client.chat.ChatColorType;
@@ -108,24 +104,6 @@ public class DropRateDisplayPlugin extends Plugin
 		CHEST_REGIONS.put(8758, "Reinforced chest");
 	}
 
-	// Reward interfaces that hold their loot in a dedicated container: on load we read that container
-	// directly (source name resolved via the data store's overrides). Interface + container IDs mirror
-	// how RuneLite's own Loot Tracker reads them, using core gameval constants (no runtime dependency).
-	private static final Map<Integer, RewardInterface> REWARD_INTERFACES = new HashMap<>();
-
-	static
-	{
-		REWARD_INTERFACES.put(InterfaceID.BARROWS_REWARD, new RewardInterface("Barrows", InventoryID.TRAIL_REWARDINV));
-		REWARD_INTERFACES.put(InterfaceID.TRAIL_REWARDSCREEN, new RewardInterface(null, InventoryID.TRAIL_REWARDINV));
-		REWARD_INTERFACES.put(InterfaceID.RAIDS_REWARDS, new RewardInterface("Chambers of Xeric", InventoryID.RAIDS_REWARDS));
-		REWARD_INTERFACES.put(InterfaceID.TOB_CHESTS, new RewardInterface("Theatre of Blood", InventoryID.TOB_CHESTS));
-		REWARD_INTERFACES.put(InterfaceID.TOA_CHESTS, new RewardInterface("Tombs of Amascut", InventoryID.TOA_CHESTS));
-		REWARD_INTERFACES.put(InterfaceID.PMOON_REWARD, new RewardInterface("Lunar Chest", InventoryID.PMOON_REWARDINV));
-		REWARD_INTERFACES.put(InterfaceID.COLOSSEUM_REWARD_CHEST_2, new RewardInterface("Fortis Colosseum", InventoryID.COLOSSEUM_REWARDS));
-		REWARD_INTERFACES.put(InterfaceID.TRAWLER_REWARD, new RewardInterface("Fishing Trawler", InventoryID.TRAWLER_REWARDINV));
-		REWARD_INTERFACES.put(InterfaceID.FOSSIL_DRIFTNET, new RewardInterface("Drift Net", InventoryID.MACRO_CERTER));
-	}
-
 	@Inject
 	Client client;
 
@@ -145,6 +123,9 @@ public class DropRateDisplayPlugin extends Plugin
 	DropRateInventoryOverlay inventoryOverlay;
 
 	@Inject
+	RewardInterfaceOverlay rewardOverlay;
+
+	@Inject
 	ChatMessageManager chatMessageManager;
 
 	@Inject
@@ -158,10 +139,6 @@ public class DropRateDisplayPlugin extends Plugin
 	private int recentAddedTick = Integer.MIN_VALUE;
 	private String pendingSource;
 	private int pendingTick = Integer.MIN_VALUE;
-	private String lastClueTier;
-
-	// Last item set read from each reward container, so a re-fired reward interface is not re-announced.
-	private final Map<Integer, List<Integer>> lastRewardItems = new HashMap<>();
 
 	@Provides
 	DropRateDisplayConfig provideConfig(ConfigManager configManager)
@@ -175,6 +152,7 @@ public class DropRateDisplayPlugin extends Plugin
 		dataStore.load();
 		overlayManager.add(overlay);
 		overlayManager.add(inventoryOverlay);
+		overlayManager.add(rewardOverlay);
 		resetState();
 		log.debug("Drop Rate Display started ({} sources)", dataStore.getSourceCount());
 	}
@@ -184,6 +162,7 @@ public class DropRateDisplayPlugin extends Plugin
 	{
 		overlayManager.remove(overlay);
 		overlayManager.remove(inventoryOverlay);
+		overlayManager.remove(rewardOverlay);
 		overlay.clear();
 		inventoryOverlay.clear();
 		resetState();
@@ -249,7 +228,9 @@ public class DropRateDisplayPlugin extends Plugin
 		Matcher clue = CLUE_COMPLETED_PATTERN.matcher(message);
 		if (clue.find())
 		{
-			lastClueTier = clue.group(1);
+			// The clue reward screen reuses one interface across tiers; tell the overlay which casket so
+			// it can draw the right table when the reward interface opens.
+			rewardOverlay.setClueCasketSource("Reward casket (" + clue.group(1) + ")");
 			return;
 		}
 
@@ -315,24 +296,6 @@ public class DropRateDisplayPlugin extends Plugin
 			|| message.equals("You take some loot from inside.")
 			|| message.startsWith("You open the chest and find")
 			|| GRUBBY_CHEST_PATTERN.matcher(message).matches();
-	}
-
-	@Subscribe
-	public void onWidgetLoaded(WidgetLoaded event)
-	{
-		RewardInterface reward = REWARD_INTERFACES.get(event.getGroupId());
-		if (reward == null)
-		{
-			return;
-		}
-
-		String source = reward.source;
-		if (source == null)
-		{
-			// Clue casket: name the source from the most recently completed clue tier.
-			source = lastClueTier != null ? "Reward casket (" + lastClueTier + ")" : "Reward casket";
-		}
-		processRewardContainer(source, reward.containerId);
 	}
 
 	@Subscribe
@@ -462,67 +425,6 @@ public class DropRateDisplayPlugin extends Plugin
 		}
 	}
 
-	/** Reads a reward interface's own item container (raids, Barrows, Moons, etc.) and shows its rates. */
-	private void processRewardContainer(String source, int containerId)
-	{
-		if (!config.showChatRates() && !config.showInventoryRates())
-		{
-			return;
-		}
-
-		SourceDropTable table = dataStore.getSource(source);
-		if (table == null)
-		{
-			log.debug("[Drop Rate] no drop table for reward source '{}'", source);
-			return;
-		}
-
-		ItemContainer container = client.getItemContainer(containerId);
-		if (container == null)
-		{
-			return;
-		}
-
-		List<Integer> itemIds = new ArrayList<>();
-		for (Item item : container.getItems())
-		{
-			if (item.getId() >= 0)
-			{
-				itemIds.add(item.getId());
-			}
-		}
-		// Reward interfaces can re-fire their WidgetLoaded; only act when the contents actually change.
-		if (itemIds.isEmpty() || itemIds.equals(lastRewardItems.get(containerId)))
-		{
-			return;
-		}
-		lastRewardItems.put(containerId, itemIds);
-
-		String displaySource = table.getSourceName() != null ? table.getSourceName() : source;
-		for (Item item : container.getItems())
-		{
-			if (item.getId() < 0)
-			{
-				continue;
-			}
-			String itemName = itemManager.getItemComposition(item.getId()).getName();
-			DropRateEntry entry = table.getDrop(itemName);
-			if (entry == null || !shouldDisplay(entry.getRate()))
-			{
-				continue;
-			}
-
-			if (config.showChatRates())
-			{
-				sendChatMessage(itemName, displaySource, RateParser.formatRateFull(entry.getRate()));
-			}
-			if (config.showInventoryRates())
-			{
-				inventoryOverlay.addRate(item.getId(), RateParser.formatRate(entry.getRate()));
-			}
-		}
-	}
-
 	private String minigameSourceForRegion()
 	{
 		int region = playerRegion();
@@ -553,30 +455,10 @@ public class DropRateDisplayPlugin extends Plugin
 
 	// --- Shared helpers ----------------------------------------------------------------------------
 
-	/**
-	 * Whether a rate should be shown given the user's filters: never for guaranteed drops, numeric
-	 * rates gated by the minimum-rarity threshold, and qualitative labels only when opted in.
-	 */
 	private boolean shouldDisplay(String rate)
 	{
-		if (rate == null || rate.trim().isEmpty())
-		{
-			return false;
-		}
-
-		if (RateParser.isAlways(rate))
-		{
-			return config.showGuaranteedDrops();
-		}
-
-		double denominator = RateParser.parseDenominator(rate);
-		if (denominator > 0)
-		{
-			int minimum = config.minimumRarity();
-			return minimum <= 0 || denominator >= minimum;
-		}
-
-		return RateParser.isQualitative(rate) && config.showQualitativeRates();
+		return RateParser.shouldDisplay(rate, config.minimumRarity(), config.showQualitativeRates(),
+			config.showGuaranteedDrops());
 	}
 
 	private void sendChatMessage(String itemName, String source, String rate)
@@ -621,21 +503,7 @@ public class DropRateDisplayPlugin extends Plugin
 	{
 		pendingSource = null;
 		recentAdded = null;
-		lastClueTier = null;
 		inventorySnapshot = new HashMap<>();
-		lastRewardItems.clear();
-	}
-
-	/** A reward interface's source name (null = derive, e.g. clue caskets) and the container to read. */
-	private static final class RewardInterface
-	{
-		private final String source;
-		private final int containerId;
-
-		private RewardInterface(String source, int containerId)
-		{
-			this.source = source;
-			this.containerId = containerId;
-		}
+		rewardOverlay.setClueCasketSource(null);
 	}
 }

@@ -44,10 +44,21 @@ public interface DropRateDisplayConfig extends Config
 	}
 
 	@ConfigItem(
+		keyName = "showRewardInterfaceRates",
+		name = "Show rates on reward interfaces",
+		description = "Draw drop rates over the items shown on reward screens (Barrows, raids, Moons, caskets, etc.)",
+		position = 4
+	)
+	default boolean showRewardInterfaceRates()
+	{
+		return true;
+	}
+
+	@ConfigItem(
 		keyName = "minimumRarity",
 		name = "Minimum rarity to display",
 		description = "Only show rates for items rarer than this (e.g. 25 means 1/25 or rarer). Set to 0 to show all.",
-		position = 4
+		position = 5
 	)
 	default int minimumRarity()
 	{
@@ -58,7 +69,7 @@ public interface DropRateDisplayConfig extends Config
 		keyName = "rateColor",
 		name = "Rate text colour",
 		description = "Colour of the drop rate text drawn on items",
-		position = 5
+		position = 6
 	)
 	default Color rateColor()
 	{
@@ -69,7 +80,7 @@ public interface DropRateDisplayConfig extends Config
 		keyName = "showQualitativeRates",
 		name = "Show qualitative rates",
 		description = "Display 'Uncommon', 'Rare' etc. when the exact rate is unknown",
-		position = 6
+		position = 7
 	)
 	default boolean showQualitativeRates()
 	{
@@ -80,7 +91,7 @@ public interface DropRateDisplayConfig extends Config
 		keyName = "showGuaranteedDrops",
 		name = "Show guaranteed drops",
 		description = "Also show 'Always' for 100% drops such as bones and ashes",
-		position = 7
+		position = 8
 	)
 	default boolean showGuaranteedDrops()
 	{
@@ -92,7 +103,7 @@ public interface DropRateDisplayConfig extends Config
 		name = "Merge with Ground Items",
 		description = "When the Ground Items plugin is enabled, append the rate to each item's line instead "
 			+ "of drawing a separate labelled line",
-		position = 8
+		position = 9
 	)
 	default boolean mergeWithGroundItems()
 	{
