@@ -149,7 +149,9 @@ public class DropRateDisplayPlugin extends Plugin
 				continue;
 			}
 
-			overlay.addGroundRate(location, item.getId(), itemName, RateParser.formatRate(entry.getRate()));
+			// Ground rows have room (the rate sits after the item's full line), so show the exact wiki
+			// rate; only the space-constrained inventory icon uses the rounded 1/N form.
+			overlay.addGroundRate(location, item.getId(), itemName, RateParser.formatRateFull(entry.getRate()));
 		}
 	}
 
