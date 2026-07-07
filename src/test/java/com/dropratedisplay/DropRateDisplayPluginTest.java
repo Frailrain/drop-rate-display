@@ -34,6 +34,9 @@ public class DropRateDisplayPluginTest
 		+ "}},"
 		+ "\"Martial salvage\":{\"drops\":{"
 		+ "\"Rune full helm\":{\"rate\":\"1/25.6\",\"quantity\":\"1\"}"
+		+ "}},"
+		+ "\"Eclectic impling\":{\"drops\":{"
+		+ "\"Rune full helm\":{\"rate\":\"1/40\",\"quantity\":\"1\"}"
 		+ "}}}}";
 
 	private static final int WHIP_ID = 4151;
@@ -170,6 +173,26 @@ public class DropRateDisplayPluginTest
 	public void inventoryChangeWithoutTriggerIsSilent()
 	{
 		plugin.handleInventoryChange(itemMap(RUNE_FULL_HELM_ID, 1));
+
+		verify(chatMessageManager, never()).queue(any());
+		verify(inventoryOverlay, never()).addRate(anyInt(), any());
+	}
+
+	/** Impling loot arrives via ServerNpcLoot (knapsack), never the ground: show chat + inventory rate. */
+	@Test
+	public void implingServerLootShowsChatAndInventoryRate()
+	{
+		plugin.handleServerNpcLoot("Eclectic impling", itemMap(RUNE_FULL_HELM_ID, 1));
+
+		verify(chatMessageManager).queue(any());
+		verify(inventoryOverlay).addRate(eq(RUNE_FULL_HELM_ID), eq("1/40"));
+	}
+
+	/** Ordinary kills also fire ServerNpcLoot but are shown on the ground; only implings route here. */
+	@Test
+	public void nonImplingServerLootIsIgnored()
+	{
+		plugin.handleServerNpcLoot("Abyssal demon", itemMap(WHIP_ID, 1));
 
 		verify(chatMessageManager, never()).queue(any());
 		verify(inventoryOverlay, never()).addRate(anyInt(), any());

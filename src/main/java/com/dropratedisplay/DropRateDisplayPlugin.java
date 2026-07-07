@@ -2,6 +2,7 @@ package com.dropratedisplay;
 
 import com.google.inject.Provides;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -27,6 +28,7 @@ import net.runelite.client.chat.QueuedMessage;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.NpcLootReceived;
+import net.runelite.client.events.ServerNpcLoot;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.game.ItemStack;
 import net.runelite.client.plugins.Plugin;
@@ -209,6 +211,34 @@ public class DropRateDisplayPlugin extends Plugin
 			// so changing any of those settings updates what is already on screen.
 			overlay.addGroundRate(location, item.getId(), itemName, entry.getRate());
 		}
+	}
+
+	/**
+	 * Server-reported loot that never lands on the ground. Implings deliver their loot straight to the
+	 * inventory -- whether caught with a net, caught barehanded, or collected by looting an impling jar --
+	 * and are reported here, not via {@link NpcLootReceived}. Only implings are routed to the inventory/chat
+	 * display: ordinary kills also fire this event, but their loot is on the ground and already shown by
+	 * {@link #onNpcLootReceived}, so handling them here as well would show every drop twice.
+	 */
+	@Subscribe
+	public void onServerNpcLoot(ServerNpcLoot event)
+	{
+		Map<Integer, Integer> items = new HashMap<>();
+		for (ItemStack item : event.getItems())
+		{
+			items.merge(item.getId(), item.getQuantity(), Integer::sum);
+		}
+		handleServerNpcLoot(Text.removeTags(event.getComposition().getName()), items);
+	}
+
+	/** Core of {@link #onServerNpcLoot}, split out so it can be driven directly in tests. */
+	void handleServerNpcLoot(String npcName, Map<Integer, Integer> items)
+	{
+		if (npcName == null || !npcName.toLowerCase(Locale.ROOT).contains("impling"))
+		{
+			return;
+		}
+		processInventoryLoot(npcName, items);
 	}
 
 	// --- Non-NPC loot: chat/widget triggers paired with the inventory change -----------------------
