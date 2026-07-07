@@ -238,10 +238,23 @@ public class DropRateDisplayPlugin extends Plugin
 		handleServerNpcLoot(Text.removeTags(event.getComposition().getName()), items);
 	}
 
+	/**
+	 * Sources whose loot the server reports via {@link ServerNpcLoot} but that never fire
+	 * {@link NpcLootReceived}, because they don't die a normal death on a tile: implings are caught, and
+	 * wall beasts retreat into the wall. We show these in chat + on the item icon (there's no ground
+	 * location to place them on). Ordinary kills DO fire {@link NpcLootReceived} and are shown on the floor,
+	 * so they must not be routed here or every drop would show twice.
+	 */
+	private static boolean isServerLootSource(String npcName)
+	{
+		final String lower = npcName.toLowerCase(Locale.ROOT);
+		return lower.contains("impling") || lower.equals("wall beast");
+	}
+
 	/** Core of {@link #onServerNpcLoot}, split out so it can be driven directly in tests. */
 	void handleServerNpcLoot(String npcName, Map<Integer, Integer> items)
 	{
-		if (npcName == null || !npcName.toLowerCase(Locale.ROOT).contains("impling"))
+		if (npcName == null || !isServerLootSource(npcName))
 		{
 			return;
 		}

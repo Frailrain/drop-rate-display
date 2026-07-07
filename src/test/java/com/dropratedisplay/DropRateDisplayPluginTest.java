@@ -37,6 +37,9 @@ public class DropRateDisplayPluginTest
 		+ "}},"
 		+ "\"Eclectic impling\":{\"drops\":{"
 		+ "\"Rune full helm\":{\"rate\":\"1/40\",\"quantity\":\"1\"}"
+		+ "}},"
+		+ "\"Wall beast\":{\"drops\":{"
+		+ "\"Rune full helm\":{\"rate\":\"1/32\",\"quantity\":\"1\"}"
 		+ "}}}}";
 
 	private static final int WHIP_ID = 4151;
@@ -187,6 +190,16 @@ public class DropRateDisplayPluginTest
 
 		verify(chatMessageManager).queue(any());
 		verify(inventoryOverlay).addRate(eq(RUNE_FULL_HELM_ID), eq("1/40"));
+	}
+
+	/** Wall beasts retreat into the wall, so they never fire NpcLootReceived; loot comes via ServerNpcLoot. */
+	@Test
+	public void wallBeastServerLootShowsChatAndInventoryRate()
+	{
+		plugin.handleServerNpcLoot("Wall beast", itemMap(RUNE_FULL_HELM_ID, 1));
+
+		verify(chatMessageManager).queue(any());
+		verify(inventoryOverlay).addRate(eq(RUNE_FULL_HELM_ID), eq("1/32"));
 	}
 
 	/** Ordinary kills also fire ServerNpcLoot but are shown on the ground; only implings route here. */
