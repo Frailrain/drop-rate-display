@@ -83,6 +83,25 @@ public class RateParserTest
 	}
 
 	@Test
+	public void shouldDisplayAppliesEveryFilter()
+	{
+		// Numeric rates are gated purely by the minimum-rarity threshold.
+		assertTrue(RateParser.shouldDisplay("1/512", 10, false, false));
+		assertFalse(RateParser.shouldDisplay("1/5", 10, false, false));
+		assertTrue(RateParser.shouldDisplay("1/5", 0, false, false));      // 0 = show everything
+
+		// Guaranteed drops only show when explicitly enabled.
+		assertFalse(RateParser.shouldDisplay("Always", 0, false, false));
+		assertTrue(RateParser.shouldDisplay("Always", 0, false, true));
+
+		// Qualitative labels only show when explicitly enabled.
+		assertFalse(RateParser.shouldDisplay("Rare", 0, false, false));
+		assertTrue(RateParser.shouldDisplay("Rare", 0, true, false));
+
+		assertFalse(RateParser.shouldDisplay(null, 0, true, true));
+	}
+
+	@Test
 	public void formatStripsFootnoteAndKeepsLabels()
 	{
 		assertEquals("1/512", RateParser.formatRate("1/512"));

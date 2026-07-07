@@ -117,6 +117,13 @@ public class DropRateDisplayOverlay extends Overlay
 
 		for (GroundRate rate : snapshot)
 		{
+			// Rarity filter is applied here (not at capture) so changing it updates what's already shown.
+			if (!RateParser.shouldDisplay(rate.rate, config.minimumRarity(),
+				config.showQualitativeRates(), config.showGuaranteedDrops()))
+			{
+				continue;
+			}
+
 			final LocalPoint localPoint = LocalPoint.fromWorld(client, rate.point);
 			if (localPoint == null)
 			{
@@ -137,7 +144,8 @@ public class DropRateDisplayOverlay extends Overlay
 			}
 
 			// Ground Items off/unavailable: self-labelled fallback with its own stacking and expiry.
-			final String text = rate.itemName + " (" + rate.rate + ")";
+			final String rateText = RateParser.format(rate.rate, config.groundRateFormat());
+			final String text = rate.itemName + " (" + rateText + ")";
 			final Point point = Perspective.getCanvasTextLocation(client, graphics, localPoint, text, OFFSET_Z);
 			if (point == null)
 			{
@@ -180,7 +188,8 @@ public class DropRateDisplayOverlay extends Overlay
 
 		final int x = point.getX() + fm.stringWidth(line) + GAP_PX;
 		final int y = point.getY() - STRING_GAP * offset;
-		drawRate(graphics, x, y, rate.rate, rate.rate);
+		final String rateText = RateParser.format(rate.rate, config.groundRateFormat());
+		drawRate(graphics, x, y, rateText, rate.rate);
 	}
 
 	private void drawRate(Graphics2D graphics, int x, int y, String text, String rateForColour)

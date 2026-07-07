@@ -63,6 +63,13 @@ public class DropRateInventoryOverlay extends WidgetItemOverlay
 			return;
 		}
 
+		// Filter/format/colour are all applied here from the raw rate, so config changes update live.
+		if (!RateParser.shouldDisplay(rate.rate, config.minimumRarity(),
+			config.showQualitativeRates(), config.showGuaranteedDrops()))
+		{
+			return;
+		}
+
 		Rectangle bounds = widgetItem.getCanvasBounds();
 		if (bounds == null)
 		{
@@ -70,7 +77,7 @@ public class DropRateInventoryOverlay extends WidgetItemOverlay
 		}
 
 		TextComponent text = new TextComponent();
-		text.setText(rate.rate);
+		text.setText(RateParser.format(rate.rate, config.inventoryRateFormat()));
 		text.setColor(RarityColor.colour(rate.rate, config));
 		text.setOutline(true);
 		// Bottom-left of the slot, clear of the top-left quantity numbers.

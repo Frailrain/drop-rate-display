@@ -117,11 +117,15 @@ public class DropRateDisplayPluginTest
 		verify(overlay).addGroundRate(eq(new WorldPoint(3200, 3200, 0)), eq(WHIP_ID), eq("Abyssal whip"), contains("1/512"));
 	}
 
+	/**
+	 * Every rated drop is passed to the overlay with its raw rate. The rarity filter (minimum rarity,
+	 * "hide guaranteed drops", qualitative) is applied live at render time, so it is not gated here.
+	 */
 	@Test
-	public void guaranteedDropIsNotShown()
+	public void ratedDropIsPassedRawToOverlay()
 	{
 		plugin.onNpcLootReceived(npcLoot("Abyssal demon", new ItemStack(BONES_ID, 1)));
-		verify(overlay, never()).addGroundRate(any(), anyInt(), any(), any());
+		verify(overlay).addGroundRate(any(), eq(BONES_ID), eq("Bones"), eq("Always"));
 	}
 
 	@Test
@@ -147,7 +151,8 @@ public class DropRateDisplayPluginTest
 		plugin.handleInventoryChange(itemMap(RUNE_FULL_HELM_ID, 1));
 
 		verify(chatMessageManager).queue(any());
-		verify(inventoryOverlay).addRate(eq(RUNE_FULL_HELM_ID), eq("1/26"));
+		// Inventory icon gets the raw rate; the overlay formats it live (rounds 1/25.6 -> 1/26 on the icon).
+		verify(inventoryOverlay).addRate(eq(RUNE_FULL_HELM_ID), eq("1/25.6"));
 	}
 
 	/** The ordering that broke the old snapshot-at-trigger code: item arrives before the trigger. */
@@ -157,7 +162,7 @@ public class DropRateDisplayPluginTest
 		plugin.handleInventoryChange(itemMap(RUNE_FULL_HELM_ID, 1));
 		plugin.beginPending("Martial salvage");
 
-		verify(inventoryOverlay).addRate(eq(RUNE_FULL_HELM_ID), eq("1/26"));
+		verify(inventoryOverlay).addRate(eq(RUNE_FULL_HELM_ID), eq("1/25.6"));
 	}
 
 	/** An inventory change with no matching source trigger must not emit anything. */

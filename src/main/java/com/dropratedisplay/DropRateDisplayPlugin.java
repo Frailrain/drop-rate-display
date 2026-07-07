@@ -200,13 +200,14 @@ public class DropRateDisplayPlugin extends Plugin
 		{
 			String itemName = itemManager.getItemComposition(item.getId()).getName();
 			DropRateEntry entry = table.getDrop(itemName);
-			if (entry == null || !shouldDisplay(entry.getRate()))
+			if (entry == null)
 			{
 				continue;
 			}
 
-			overlay.addGroundRate(location, item.getId(), itemName,
-				RateParser.format(entry.getRate(), config.groundRateFormat()));
+			// Store the raw wiki rate; the overlay applies the format, rarity filter and colour each frame,
+			// so changing any of those settings updates what is already on screen.
+			overlay.addGroundRate(location, item.getId(), itemName, entry.getRate());
 		}
 	}
 
@@ -408,18 +409,20 @@ public class DropRateDisplayPlugin extends Plugin
 		{
 			String itemName = itemManager.getItemComposition(itemId).getName();
 			DropRateEntry entry = table.getDrop(itemName);
-			if (entry == null || !shouldDisplay(entry.getRate()))
+			if (entry == null)
 			{
 				continue;
 			}
 
-			if (config.showChatRates())
+			// Chat is one-shot, so it is filtered and formatted now. The inventory icon stores the raw
+			// rate and lets the overlay filter / format / colour it live.
+			if (config.showChatRates() && shouldDisplay(entry.getRate()))
 			{
 				sendChatMessage(itemName, displaySource, RateParser.format(entry.getRate(), config.chatRateFormat()));
 			}
 			if (config.showInventoryRates())
 			{
-				inventoryOverlay.addRate(itemId, RateParser.format(entry.getRate(), config.inventoryRateFormat()));
+				inventoryOverlay.addRate(itemId, entry.getRate());
 			}
 		}
 	}

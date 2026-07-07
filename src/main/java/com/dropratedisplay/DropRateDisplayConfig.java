@@ -113,7 +113,7 @@ public interface DropRateDisplayConfig extends Config
 	)
 	default int minimumRarity()
 	{
-		return 10;
+		return 0;
 	}
 
 	@ConfigItem(
