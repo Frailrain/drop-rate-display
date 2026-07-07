@@ -239,18 +239,16 @@ public class DropRateDisplayPlugin extends Plugin
 	}
 
 	/**
-	 * Sources whose loot the server reports via {@link ServerNpcLoot} and that never fire
-	 * {@link NpcLootReceived}: implings are caught into the knapsack, not killed, so there's no floor loot.
-	 * We show these in chat + on the item icon. Ordinary kills DO fire {@link NpcLootReceived} and are shown
-	 * on the floor, so they must not be routed here or every drop would show twice.
-	 *
-	 * <p>Wall beasts also come through here, but they DO fire {@link NpcLootReceived} — attributed to the
-	 * "Hole in the wall" NPC, which {@link DropRateDataStore} maps to the Wall beast table — so they're
-	 * handled on the floor and deliberately excluded here to avoid doubling.
+	 * Sources whose loot the server reports via {@link ServerNpcLoot} but that never fire
+	 * {@link NpcLootReceived}, because they don't die a normal death on a tile: implings are caught, and
+	 * wall beasts retreat into the wall. We show these in chat + on the item icon (there's no ground
+	 * location to place them on). Ordinary kills DO fire {@link NpcLootReceived} and are shown on the floor,
+	 * so they must not be routed here or every drop would show twice.
 	 */
 	private static boolean isServerLootSource(String npcName)
 	{
-		return npcName.toLowerCase(Locale.ROOT).contains("impling");
+		final String lower = npcName.toLowerCase(Locale.ROOT);
+		return lower.contains("impling") || lower.equals("wall beast");
 	}
 
 	/** Core of {@link #onServerNpcLoot}, split out so it can be driven directly in tests. */
