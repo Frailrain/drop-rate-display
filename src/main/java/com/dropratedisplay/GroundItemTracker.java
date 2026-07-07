@@ -1,86 +1,82 @@
 package com.dropratedisplay;
 
+import com.google.common.collect.HashBasedTable;
+import com.google.common.collect.Table;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import javax.inject.Singleton;
 import net.runelite.api.coords.WorldPoint;
 
 /**
- * Mirrors the core Ground Items plugin's per-tile item table so our merged rates land on the exact rows
- * it draws — without reflection.
+ * Mirrors the core Ground Items plugin's per-tile item table so our merged rates land on the exact rows it
+ * draws — without reflection.
  *
- * <p>Ground Items keeps its items in a Guava {@code HashBasedTable}, whose per-tile column map is a
- * {@link HashMap} created with initial capacity 1 (Guava's {@code newHashMapWithExpectedSize(0)}). Its row
- * order is therefore that {@code HashMap}'s key-iteration order — which depends on the whole insert/resize
- * history, not a simple {@code id & 15} bucket, so it cannot be reproduced by a formula once the map has
- * grown. Instead we keep an identical {@code HashMap<Integer, ?>(1)} per tile and apply the same
- * insert/remove operations from the same {@code ItemSpawned}/{@code ItemDespawned} events (mirroring
- * Ground Items' own handlers: insert on spawn, subtract/remove on despawn, drop the row when it empties).
- * Replaying identical operations on an identical structure yields an identical iteration order.
- *
- * <p>Per-tile column maps are independent, so stale entries from other tiles never affect a tile's order;
- * {@link #clear()} on region load just bounds memory and keeps a revisited tile's map fresh, matching
- * Ground Items clearing on load.
+ * <p>Ground Items rows its items in the iteration order of a Guava {@link HashBasedTable} keyed by tile and
+ * item id. That order is <b>not</b> any simple function of the id (neither {@code id & 15} ascending nor
+ * descending matches — it depends on the table's internal bucket layout and insert history), so it can't be
+ * reproduced by sorting. Instead we keep an <i>identical</i> {@code HashBasedTable}, fed the same
+ * {@code ItemSpawned}/{@code ItemDespawned} operations (insert on spawn, subtract/remove on despawn) from
+ * the same events. The same class plus the same operations yields the same per-tile key iteration order by
+ * construction — {@code row(tile).keySet()} equals Ground Items' row order.
  */
 @Singleton
 class GroundItemTracker
 {
-	private final Map<WorldPoint, Map<Integer, Integer>> byTile = new HashMap<>();
+	// HashBasedTable is not thread-safe; all access is guarded on this monitor.
+	private final Table<WorldPoint, Integer, Integer> table = HashBasedTable.create();
 
-	/** Insert on spawn. Matches Ground Items: a new id is added (possibly growing the map); a repeat id
-	 *  only sums its quantity, which leaves the key — and thus the order — untouched. */
-	void add(WorldPoint tile, int itemId, int quantity)
+	/** Insert on spawn (same as Ground Items: new id added; repeat id just sums, leaving the key in place). */
+	synchronized void add(WorldPoint tile, int itemId, int quantity)
 	{
 		if (tile == null)
 		{
 			return;
 		}
-		byTile.computeIfAbsent(tile, k -> new HashMap<>(1)).merge(itemId, quantity, Integer::sum);
+		final Integer existing = table.get(tile, itemId);
+		table.put(tile, itemId, existing == null ? quantity : existing + quantity);
 	}
 
-	/** On despawn, subtract; when the id is depleted remove it, and drop the row when it empties. */
-	void remove(WorldPoint tile, int itemId, int quantity)
+	/** On despawn, subtract; remove the id when it is depleted (Ground Items drops the cell too). */
+	synchronized void remove(WorldPoint tile, int itemId, int quantity)
 	{
 		if (tile == null)
 		{
 			return;
 		}
-		final Map<Integer, Integer> column = byTile.get(tile);
-		if (column == null)
+		final Integer existing = table.get(tile, itemId);
+		if (existing == null)
 		{
 			return;
 		}
-		final Integer current = column.get(itemId);
-		if (current == null)
+		if (existing <= quantity)
 		{
-			return;
-		}
-		if (current <= quantity)
-		{
-			column.remove(itemId);
-			if (column.isEmpty())
-			{
-				byTile.remove(tile);
-			}
+			table.remove(tile, itemId);
 		}
 		else
 		{
-			column.put(itemId, current - quantity);
+			table.put(tile, itemId, existing - quantity);
 		}
 	}
 
-	void clear()
+	synchronized void clear()
 	{
-		byTile.clear();
+		table.clear();
 	}
 
-	/** Item ids on the tile in Ground Items' own row order; empty if none are tracked. */
-	List<Integer> orderedIds(WorldPoint tile)
+	/** Item ids on the tile in Ground Items' row order; empty if none are tracked. */
+	synchronized List<Integer> orderedIds(WorldPoint tile)
 	{
-		final Map<Integer, Integer> column = byTile.get(tile);
-		return column == null ? Collections.emptyList() : new ArrayList<>(column.keySet());
+		if (!table.containsRow(tile))
+		{
+			return Collections.emptyList();
+		}
+		return new ArrayList<>(table.row(tile).keySet());
+	}
+
+	/** True while the tile still holds this id (i.e. it has not been fully picked up / despawned). */
+	synchronized boolean contains(WorldPoint tile, int itemId)
+	{
+		return table.contains(tile, itemId);
 	}
 }

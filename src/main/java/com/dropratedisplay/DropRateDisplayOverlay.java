@@ -54,7 +54,6 @@ import net.runelite.client.util.WildcardMatcher;
 @Singleton
 public class DropRateDisplayOverlay extends Overlay
 {
-	private static final long EXPIRY_MS = 30_000L;
 	private static final int MAX_ENTRIES = 256;
 	private static final int STRING_GAP = 15;   // Ground Items' per-row vertical gap
 	private static final int OFFSET_Z = 20;     // Ground Items' text height offset
@@ -99,11 +98,24 @@ public class DropRateDisplayOverlay extends Overlay
 
 		synchronized (rates)
 		{
-			rates.add(new GroundRate(point, itemId, itemName, rate, System.currentTimeMillis() + EXPIRY_MS));
+			// One entry per (tile, item); a fresh drop replaces the old rate. No timer — the entry lives
+			// until its item leaves the floor (pruned on despawn), so the rate stays exactly as long as the
+			// ground item does.
+			rates.removeIf(r -> r.itemId == itemId && r.point.equals(point));
+			rates.add(new GroundRate(point, itemId, itemName, rate));
 			while (rates.size() > MAX_ENTRIES)
 			{
 				rates.remove(0);
 			}
+		}
+	}
+
+	/** Drop the rate when its item is fully gone from the tile (picked up / despawned). */
+	void removeGroundRate(WorldPoint point, int itemId)
+	{
+		synchronized (rates)
+		{
+			rates.removeIf(r -> r.itemId == itemId && r.point.equals(point));
 		}
 	}
 
@@ -123,11 +135,9 @@ public class DropRateDisplayOverlay extends Overlay
 			return null;
 		}
 
-		final long now = System.currentTimeMillis();
 		final List<GroundRate> snapshot;
 		synchronized (rates)
 		{
-			rates.removeIf(r -> r.expiresAt <= now);
 			if (rates.isEmpty())
 			{
 				return null;
@@ -199,6 +209,7 @@ public class DropRateDisplayOverlay extends Overlay
 		List<GroundRate> rated, PriceMode priceMode, GiHide giHide, FontMetrics fm)
 	{
 		final Map<Integer, GroundRate> rateById = byId(rated);
+
 		int offset = 0;
 		for (TileEntry entry : pile)
 		{
@@ -253,8 +264,8 @@ public class DropRateDisplayOverlay extends Overlay
 	/**
 	 * The tile's items in Ground Items' exact row order. Presence and quantities come from the live scene
 	 * (authoritative for what is still on the ground and how many); the order comes from
-	 * {@link GroundItemTracker}, which mirrors Ground Items' own per-tile table. Anything the tracker missed
-	 * (e.g. it spawned before this plugin started) falls back to the end, in scene order.
+	 * {@link GroundItemTracker}, which mirrors Ground Items' own {@code HashBasedTable}. Anything the tracker
+	 * missed (e.g. it spawned before this plugin started) falls back to the end, in scene order.
 	 */
 	private List<TileEntry> orderedPile(Tile sceneTile, WorldPoint tilePoint)
 	{
@@ -264,7 +275,6 @@ public class DropRateDisplayOverlay extends Overlay
 			return Collections.emptyList();
 		}
 
-		// Current items + quantities from the scene, keyed by id (Ground Items sums same-id stacks).
 		final Map<Integer, Integer> qtyById = new LinkedHashMap<>();
 		for (TileItem it : items)
 		{
@@ -280,7 +290,6 @@ public class DropRateDisplayOverlay extends Overlay
 				pile.add(new TileEntry(id, qty));
 			}
 		}
-		// Anything the tracker didn't know about goes last, in scene order.
 		for (Map.Entry<Integer, Integer> en : qtyById.entrySet())
 		{
 			pile.add(new TileEntry(en.getKey(), en.getValue()));
@@ -568,15 +577,13 @@ public class DropRateDisplayOverlay extends Overlay
 		private final int itemId;
 		private final String itemName;
 		private final String rate;
-		private final long expiresAt;
 
-		private GroundRate(WorldPoint point, int itemId, String itemName, String rate, long expiresAt)
+		private GroundRate(WorldPoint point, int itemId, String itemName, String rate)
 		{
 			this.point = point;
 			this.itemId = itemId;
 			this.itemName = itemName;
 			this.rate = rate;
-			this.expiresAt = expiresAt;
 		}
 	}
 }

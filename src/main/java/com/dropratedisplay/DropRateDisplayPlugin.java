@@ -260,7 +260,15 @@ public class DropRateDisplayPlugin extends Plugin
 	@Subscribe
 	public void onItemDespawned(ItemDespawned event)
 	{
-		groundItemTracker.remove(event.getTile().getWorldLocation(), event.getItem().getId(), event.getItem().getQuantity());
+		final WorldPoint tile = event.getTile().getWorldLocation();
+		final int itemId = event.getItem().getId();
+		groundItemTracker.remove(tile, itemId, event.getItem().getQuantity());
+		// Once the item is fully gone from the tile, drop its ground rate. There is no 30s timer for floor
+		// drops: the rate lives exactly as long as the item is on the ground.
+		if (!groundItemTracker.contains(tile, itemId))
+		{
+			overlay.removeGroundRate(tile, itemId);
+		}
 	}
 
 	@Subscribe
