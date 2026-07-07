@@ -103,6 +103,20 @@ public interface DropRateDisplayConfig extends Config
 		return true;
 	}
 
+	@ConfigItem(
+		keyName = "hideHiddenByGroundItems",
+		name = "Hide rates for items hidden by Ground Items",
+		description = "In merge mode, don't draw a rate for items the Ground Items plugin itself hides (its "
+			+ "hidden list, \"hide under value\", or \"show highlighted only\"). Stops rates floating with no "
+			+ "item text and keeps the rows aligned. Reads Ground Items' own config; no effect with merge off.",
+		section = DISPLAYS_SECTION,
+		position = 6
+	)
+	default boolean hideHiddenByGroundItems()
+	{
+		return true;
+	}
+
 	// --- Filters ----------------------------------------------------------------------------------
 
 	@ConfigItem(
