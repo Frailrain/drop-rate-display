@@ -7,6 +7,21 @@ There is **no dependency on the Loot Tracker plugin**. Monster drops come from R
 `LootManager`; everything else is detected directly from game messages, reward interfaces and menu
 actions.
 
+## Screenshots
+
+![Drop rate appended to a Ground Items line](images/ground-merge.png)
+
+*Merged with the core Ground Items plugin: the wiki rate is appended to the item's own line and
+coloured by rarity.*
+
+![Drop rates painted on a reward interface](images/reward-interface.png)
+
+*Every item on a reward interface — clue caskets, chests, raids — is annotated in place.*
+
+![Two drops on one tile, each with its own rate](images/ground-multidrop.png)
+
+*A tile with more than one drop shows each item's rate on its own row.*
+
 ## Where the rate shows
 
 - **Floor drops** (monsters and bosses) — the rate is drawn on the ground next to the item. When the

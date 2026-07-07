@@ -14,3 +14,6 @@ nbproject/
 drop_rates_pretty.json
 __pycache__/
 *.pyc
+
+# Local screenshot working folder (curated copies live in images/)
+Photos/
