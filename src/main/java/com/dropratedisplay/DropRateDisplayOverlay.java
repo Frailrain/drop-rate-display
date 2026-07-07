@@ -35,10 +35,11 @@ import net.runelite.client.util.WildcardMatcher;
  * <p>In <b>merge</b> mode the rate is placed flush after each item's line, on the correct row, so it
  * reads as one line with the core Ground Items plugin ({@code Abyssal whip (1/512)}) even for a pile of
  * 2+ drops. Rather than read Ground Items' internal state, we <i>reproduce</i> its layout entirely from
- * public data: the tile's items come from the live scene ({@link Tile#getGroundItems()}), the per-row
- * order is its {@code HashBasedTable} iteration order (a {@link HashMap} keyed by item id, i.e. bucket
- * order {@code id & 15}), and each line is rebuilt as {@code name (qty) (GE: x gp) (HA: y gp)} honouring
- * the Ground Items {@code priceDisplayMode} config — matching the exact string width it draws.
+ * public data: the tile's items and quantities come from the live scene ({@link Tile#getGroundItems()}),
+ * the per-row order comes from {@link GroundItemTracker} (which mirrors Ground Items' own table so the
+ * order is identical, rather than guessing its HashMap bucket order), and each line is rebuilt as
+ * {@code name (qty) (GE: x gp) (HA: y gp)} honouring the Ground Items {@code priceDisplayMode} config —
+ * matching the exact string width it draws.
  *
  * <p>Ground Items also skips items it hides (its hidden list, "hide under value", "show highlighted only")
  * from <i>both</i> drawing and its row count. When {@link DropRateDisplayConfig#hideHiddenByGroundItems()}
@@ -59,7 +60,6 @@ public class DropRateDisplayOverlay extends Overlay
 	private static final int OFFSET_Z = 20;     // Ground Items' text height offset
 	private static final int GAP_PX = 4;        // gap between the item's line and our appended rate
 	private static final int COINS = 995;       // Ground Items shows no price for coins
-	private static final int HASH_MASK = 15;    // default HashMap capacity (16) - 1; reproduces GI's row order
 
 	// Ground Items' isHiddenOrHighlighted() states.
 	private static final int ST_NONE = 0;
@@ -72,18 +72,20 @@ public class DropRateDisplayOverlay extends Overlay
 	private final DropRateDisplayConfig config;
 	private final ItemManager itemManager;
 	private final ConfigManager configManager;
+	private final GroundItemTracker groundItems;
 
 	/** Guarded by its own monitor; mutated from loot events and read from the render thread. */
 	private final List<GroundRate> rates = new ArrayList<>();
 
 	@Inject
 	DropRateDisplayOverlay(Client client, DropRateDisplayConfig config, ItemManager itemManager,
-		ConfigManager configManager)
+		ConfigManager configManager, GroundItemTracker groundItems)
 	{
 		this.client = client;
 		this.config = config;
 		this.itemManager = itemManager;
 		this.configManager = configManager;
+		this.groundItems = groundItems;
 		setPosition(OverlayPosition.DYNAMIC);
 		setLayer(OverlayLayer.ABOVE_SCENE);
 	}
@@ -168,7 +170,7 @@ public class DropRateDisplayOverlay extends Overlay
 				continue;
 			}
 
-			final List<TileEntry> pile = orderedPile(tile);
+			final List<TileEntry> pile = orderedPile(tile, e.getKey());
 			if (pile.isEmpty())
 			{
 				continue; // everything on this tile has been picked up
@@ -249,19 +251,20 @@ public class DropRateDisplayOverlay extends Overlay
 	}
 
 	/**
-	 * The tile's items as Ground Items would row them: merged to one entry per id (it sums same-id stacks),
-	 * then ordered by its {@code HashBasedTable} iteration order. That inner map is a {@link HashMap} keyed
-	 * by item id, so iteration is bucket order — for a realistic (&lt;13-item) pile that is {@code id & 15}
-	 * ascending, ties by insertion/spawn order, which a stable sort over the scene order reproduces.
+	 * The tile's items in Ground Items' exact row order. Presence and quantities come from the live scene
+	 * (authoritative for what is still on the ground and how many); the order comes from
+	 * {@link GroundItemTracker}, which mirrors Ground Items' own per-tile table. Anything the tracker missed
+	 * (e.g. it spawned before this plugin started) falls back to the end, in scene order.
 	 */
-	private List<TileEntry> orderedPile(Tile tile)
+	private List<TileEntry> orderedPile(Tile sceneTile, WorldPoint tilePoint)
 	{
-		final List<TileItem> items = tile.getGroundItems();
+		final List<TileItem> items = sceneTile.getGroundItems();
 		if (items == null || items.isEmpty())
 		{
 			return Collections.emptyList();
 		}
 
+		// Current items + quantities from the scene, keyed by id (Ground Items sums same-id stacks).
 		final Map<Integer, Integer> qtyById = new LinkedHashMap<>();
 		for (TileItem it : items)
 		{
@@ -269,11 +272,19 @@ public class DropRateDisplayOverlay extends Overlay
 		}
 
 		final List<TileEntry> pile = new ArrayList<>(qtyById.size());
+		for (int id : groundItems.orderedIds(tilePoint))
+		{
+			final Integer qty = qtyById.remove(id);
+			if (qty != null)
+			{
+				pile.add(new TileEntry(id, qty));
+			}
+		}
+		// Anything the tracker didn't know about goes last, in scene order.
 		for (Map.Entry<Integer, Integer> en : qtyById.entrySet())
 		{
 			pile.add(new TileEntry(en.getKey(), en.getValue()));
 		}
-		pile.sort((a, b) -> Integer.compare(a.id & HASH_MASK, b.id & HASH_MASK));
 		return pile;
 	}
 

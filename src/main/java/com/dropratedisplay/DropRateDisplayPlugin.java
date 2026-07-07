@@ -10,14 +10,18 @@ import javax.inject.Inject;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
+import net.runelite.api.GameState;
 import net.runelite.api.Item;
 import net.runelite.api.ItemContainer;
 import net.runelite.api.NPC;
 import net.runelite.api.Player;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.ChatMessage;
+import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.ItemContainerChanged;
+import net.runelite.api.events.ItemDespawned;
+import net.runelite.api.events.ItemSpawned;
 import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.api.gameval.InventoryID;
 import net.runelite.api.gameval.ItemID;
@@ -126,6 +130,9 @@ public class DropRateDisplayPlugin extends Plugin
 
 	@Inject
 	RewardInterfaceOverlay rewardOverlay;
+
+	@Inject
+	GroundItemTracker groundItemTracker;
 
 	@Inject
 	ChatMessageManager chatMessageManager;
@@ -239,6 +246,30 @@ public class DropRateDisplayPlugin extends Plugin
 			return;
 		}
 		processInventoryLoot(npcName, items);
+	}
+
+	// --- Ground Items row-order mirror: feed the tracker the same spawns/despawns it sees, so our merged
+	//     rates sit on the exact rows it draws (see GroundItemTracker). -----------------------------------
+
+	@Subscribe
+	public void onItemSpawned(ItemSpawned event)
+	{
+		groundItemTracker.add(event.getTile().getWorldLocation(), event.getItem().getId(), event.getItem().getQuantity());
+	}
+
+	@Subscribe
+	public void onItemDespawned(ItemDespawned event)
+	{
+		groundItemTracker.remove(event.getTile().getWorldLocation(), event.getItem().getId(), event.getItem().getQuantity());
+	}
+
+	@Subscribe
+	public void onGameStateChanged(GameStateChanged event)
+	{
+		if (event.getGameState() == GameState.LOADING)
+		{
+			groundItemTracker.clear();
+		}
 	}
 
 	// --- Non-NPC loot: chat/widget triggers paired with the inventory change -----------------------

@@ -89,6 +89,7 @@ public class DropRateDisplayPluginTest
 		plugin.inventoryOverlay = inventoryOverlay;
 		plugin.chatMessageManager = chatMessageManager;
 		plugin.client = client;
+		plugin.groundItemTracker = new GroundItemTracker();
 	}
 
 	private void mockItem(int id, String name)
