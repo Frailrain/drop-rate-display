@@ -9,24 +9,15 @@ actions.
 
 ## Screenshots
 
-![Drop rate appended to a Ground Items line](images/ground-merge.png)
-
-*Merged with the core Ground Items plugin: the wiki rate is appended to the item's own line and
-coloured by rarity.*
-
 ![Drop rates painted on a reward interface](images/reward-interface.png)
 
 *Every item on a reward interface — clue caskets, chests, raids — is annotated in place.*
 
-![Two drops on one tile, each with its own rate](images/ground-multidrop.png)
-
-*A tile with more than one drop shows each item's rate on its own row.*
-
 ## Where the rate shows
 
-- **Floor drops** (monsters and bosses) — the rate is drawn on the ground next to the item. When the
-  core **Ground Items** plugin is on, it's appended to that item's line (`Feather (5) (GE: 10 gp) 1/2`);
-  otherwise it's shown self-labelled (`Ensouled goblin head (1/35)`).
+- **Floor drops** (monsters and bosses) — the rate is drawn on the item's tile, self-labelled
+  (`Ensouled goblin head (1/35)`), and stacks per item when a tile holds more than one drop. Turn off
+  *Show item name* for just the rate (`1/35`), which reads more cleanly alongside the Ground Items plugin.
 - **Reward screens** — the rate is painted directly on each item on the reward interface: Barrows,
   Chambers of Xeric, Theatre of Blood, Tombs of Amascut, Perilous Moons (Lunar Chest), Fortis Colosseum,
   Fishing Trawler, Drift Net and clue caskets.
@@ -47,8 +38,8 @@ chat the full wiki rate is shown; on the space-constrained item icons it's norma
 
 Settings are grouped into four sections:
 
-- **Displays** — where rates appear (ground items, chat, inventory items, reward screens) and *Merge
-  with Ground Items* (append to each Ground Items line instead of a separate labelled line).
+- **Displays** — where rates appear (ground items, chat, inventory items, reward screens) and *Show
+  item name on ground* (label ground rates with the item name, or show just the rate).
 - **Filters** — *Minimum rarity* (only show `1/N` or rarer; `0` shows all), *Show qualitative rates*
   (`Uncommon`/`Rare`…), and *Show guaranteed drops* (`Always`).
 - **Rate format** — a dropdown per surface (floor drops, chat, reward screens, inventory), each
