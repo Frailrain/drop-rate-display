@@ -103,6 +103,13 @@ Requires JDK 11.
 - Same-named NPC variants with different drop tables are matched by name; NPC ids are bundled for future
   id-based disambiguation.
 
+## Support
+
+If this plugin is useful to you, you can support development on Ko-fi:
+[ko-fi.com/frailrain](https://ko-fi.com/frailrain) — thank you!
+
+[![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/frailrain)
+
 ## Licence
 
 BSD 2-Clause. See [LICENSE](LICENSE).
