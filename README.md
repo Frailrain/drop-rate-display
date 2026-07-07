@@ -15,9 +15,11 @@ actions.
 
 ## Where the rate shows
 
-- **Floor drops** (monsters and bosses) — the rate is drawn on the item's tile, self-labelled
-  (`Ensouled goblin head (1/35)`), and stacks per item when a tile holds more than one drop. Turn off
-  *Show item name* for just the rate (`1/35`), which reads more cleanly alongside the Ground Items plugin.
+- **Floor drops** (monsters and bosses) — with the core **Ground Items** plugin on, the rate is placed
+  flush after each item's line (`Mithril boots (GE: 2,025 gp) 1/128`), aligned per item so a pile of 2+
+  drops each gets its own rate. This reproduces Ground Items' own layout from public data (no reflection,
+  no dependency). Without Ground Items, turn off *Merge with Ground Items* for a self-labelled
+  `Ensouled goblin head (1/35)` line.
 - **Reward screens** — the rate is painted directly on each item on the reward interface: Barrows,
   Chambers of Xeric, Theatre of Blood, Tombs of Amascut, Perilous Moons (Lunar Chest), Fortis Colosseum,
   Fishing Trawler, Drift Net and clue caskets.
@@ -38,8 +40,8 @@ chat the full wiki rate is shown; on the space-constrained item icons it's norma
 
 Settings are grouped into four sections:
 
-- **Displays** — where rates appear (ground items, chat, inventory items, reward screens) and *Show
-  item name on ground* (label ground rates with the item name, or show just the rate).
+- **Displays** — where rates appear (ground items, chat, inventory items, reward screens) and *Merge
+  with Ground Items* (append the rate to each Ground Items line, or draw a self-labelled line).
 - **Filters** — *Minimum rarity* (only show `1/N` or rarer; `0` shows all), *Show qualitative rates*
   (`Uncommon`/`Rare`…), and *Show guaranteed drops* (`Always`).
 - **Rate format** — a dropdown per surface (floor drops, chat, reward screens, inventory), each

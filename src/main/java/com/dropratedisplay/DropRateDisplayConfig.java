@@ -90,14 +90,15 @@ public interface DropRateDisplayConfig extends Config
 	}
 
 	@ConfigItem(
-		keyName = "showItemName",
-		name = "Show item name on ground",
-		description = "Label ground rates with the item name (e.g. \"Abyssal whip (1/512)\"). Turn off to show "
-			+ "just the rate, which is tidier if you also run the Ground Items plugin.",
+		keyName = "mergeWithGroundItems",
+		name = "Merge with Ground Items",
+		description = "Place the rate flush after each item's Ground Items line (e.g. \"Abyssal whip (1/512)\"), "
+			+ "aligned per item for 2+ drops. Turn off if you don't run the Ground Items plugin to get a "
+			+ "self-labelled \"Item (rate)\" line instead.",
 		section = DISPLAYS_SECTION,
 		position = 5
 	)
-	default boolean showItemName()
+	default boolean mergeWithGroundItems()
 	{
 		return true;
 	}
