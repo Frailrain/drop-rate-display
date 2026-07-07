@@ -187,7 +187,7 @@ public class DropRateDisplayOverlay extends Overlay
 	{
 		final TextComponent component = new TextComponent();
 		component.setText(text);
-		component.setColor(RarityColor.resolve(rateForColour, config.rateColor(), config.colourByRarity()));
+		component.setColor(RarityColor.colour(rateForColour, config));
 		component.setOutline(true);
 		component.setPosition(x, y);
 		component.render(graphics);

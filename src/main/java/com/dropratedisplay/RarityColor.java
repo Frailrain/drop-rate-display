@@ -1,54 +1,78 @@
 package com.dropratedisplay;
 
 import java.awt.Color;
+import java.util.Locale;
 
 /**
- * Escalating colours by rarity, so a glance at the colour tells you roughly how rare a drop is. Tiers are
- * chosen for legibility on any background (paired with a text outline): common drops are the calm yellow
- * you see most, and the scale climbs to an alarm red for the rarest.
+ * Buckets a drop rate into a rarity tier and resolves the tier's configured colour, so a glance at the
+ * colour tells you roughly how rare a drop is. Thresholds climb {@code 1/50 -> 1/500 -> 1/5,000 -> rarer};
+ * guaranteed drops sit at the common end and qualitative labels map to the obvious tier.
  */
 final class RarityColor
 {
-	private static final Color COMMON = new Color(255, 224, 66);      // <= 1/50    yellow
-	private static final Color UNCOMMON = new Color(86, 214, 86);     // <= 1/500   green
-	private static final Color RARE = new Color(190, 120, 255);       // <= 1/5,000 purple
-	private static final Color ULTRA_RARE = new Color(255, 74, 74);   // > 1/5,000  red
+	enum Tier
+	{
+		COMMON, UNCOMMON, RARE, ULTRA_RARE
+	}
 
 	private RarityColor()
 	{
 	}
 
-	/** Tier colour for a rate by its effective "1 in N" denominator, or null for Always / qualitative rates. */
-	static Color forRate(String rate)
+	/** The rarity tier for a rate by its effective "1 in N" denominator (or by its qualitative label). */
+	static Tier tierFor(String rate)
 	{
 		double denominator = RateParser.parseDenominator(rate);
-		if (denominator <= 0)
+		if (denominator < 0)
 		{
-			return null;
+			// "Always" — guaranteed, i.e. the least rare thing there is.
+			return Tier.COMMON;
+		}
+		if (denominator == 0)
+		{
+			// Qualitative label (or unparseable): map the label to the obvious tier.
+			String label = rate == null ? "" : rate.trim().toLowerCase(Locale.ROOT);
+			switch (label)
+			{
+				case "very rare":
+					return Tier.ULTRA_RARE;
+				case "rare":
+					return Tier.RARE;
+				case "uncommon":
+					return Tier.UNCOMMON;
+				default:
+					return Tier.COMMON;
+			}
 		}
 		if (denominator <= 50)
 		{
-			return COMMON;
+			return Tier.COMMON;
 		}
 		if (denominator <= 500)
 		{
-			return UNCOMMON;
+			return Tier.UNCOMMON;
 		}
 		if (denominator <= 5000)
 		{
-			return RARE;
+			return Tier.RARE;
 		}
-		return ULTRA_RARE;
+		return Tier.ULTRA_RARE;
 	}
 
-	/** Resolves the text colour: the rarity tier when enabled (falling back to {@code base}), else {@code base}. */
-	static Color resolve(String rate, Color base, boolean colourByRarity)
+	/** The configured colour for a rate's rarity tier. */
+	static Color colour(String rate, DropRateDisplayConfig config)
 	{
-		if (!colourByRarity)
+		switch (tierFor(rate))
 		{
-			return base;
+			case UNCOMMON:
+				return config.uncommonColour();
+			case RARE:
+				return config.rareColour();
+			case ULTRA_RARE:
+				return config.ultraRareColour();
+			case COMMON:
+			default:
+				return config.commonColour();
 		}
-		Color tier = forRate(rate);
-		return tier != null ? tier : base;
 	}
 }

@@ -206,7 +206,7 @@ public class DropRateDisplayPlugin extends Plugin
 			}
 
 			overlay.addGroundRate(location, item.getId(), itemName,
-				RateParser.format(entry.getRate(), config.rateFormat()));
+				RateParser.format(entry.getRate(), config.groundRateFormat()));
 		}
 	}
 
@@ -413,14 +413,13 @@ public class DropRateDisplayPlugin extends Plugin
 				continue;
 			}
 
-			String display = RateParser.format(entry.getRate(), config.rateFormat());
 			if (config.showChatRates())
 			{
-				sendChatMessage(itemName, displaySource, display);
+				sendChatMessage(itemName, displaySource, RateParser.format(entry.getRate(), config.chatRateFormat()));
 			}
 			if (config.showInventoryRates())
 			{
-				inventoryOverlay.addRate(itemId, display);
+				inventoryOverlay.addRate(itemId, RateParser.format(entry.getRate(), config.inventoryRateFormat()));
 			}
 		}
 	}

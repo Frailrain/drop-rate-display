@@ -30,19 +30,18 @@ chat the full wiki rate is shown; on the space-constrained item icons it's norma
 
 ## Configuration
 
-- **Show rates on ground items** — the ground overlay for monster drops.
-- **Show rates in chat** — chat lines for inventory-received loot.
-- **Show rates on inventory items** — the ~30s rate on a received item's icon.
-- **Show rates on reward interfaces** — draw rates over reward-screen items.
-- **Minimum rarity to display** — only show items `1/N` or rarer (default `10`; `0` shows everything).
-- **Rate format** — how rates read: `Exact` (`100/2,440`), `1 in X` (`1/24.4`, as on the wiki), or
-  `1 in X (rounded)` (`1/24`).
-- **Colour by rarity** — colour the rate by how rare it is: yellow (common) → green → purple → red
-  (ultra-rare). Off falls back to a single colour.
-- **Rate text colour** — the single colour used when *Colour by rarity* is off.
-- **Show qualitative rates** — also show `Uncommon` / `Rare` etc. when an exact rate is unknown.
-- **Show guaranteed drops** — also show `Always` for 100% drops (bones, ashes…).
-- **Merge with Ground Items** — append to each Ground Items line instead of a separate labelled line.
+Settings are grouped into four sections:
+
+- **Displays** — where rates appear (ground items, chat, inventory items, reward screens) and *Merge
+  with Ground Items* (append to each Ground Items line instead of a separate labelled line).
+- **Filters** — *Minimum rarity* (only show `1/N` or rarer; `0` shows all), *Show qualitative rates*
+  (`Uncommon`/`Rare`…), and *Show guaranteed drops* (`Always`).
+- **Rate format** — a dropdown per surface (floor drops, chat, reward screens, inventory), each
+  `Exact` (`100/2,440`), `1 in X` (`1/24.4`, as the wiki renders it), or `1 in X (rounded)` (`1/24`).
+  Roomy surfaces default to exact, tiny item icons to rounded.
+- **Rarity colours** — a colour per tier, so the colour tells you the rarity at a glance: Common
+  (`≤ 1/50`) → Uncommon (`≤ 1/500`) → Rare (`≤ 1/5,000`) → Ultra-rare (rarer). All rate text is
+  outlined for legibility on any background.
 
 ## Data
 

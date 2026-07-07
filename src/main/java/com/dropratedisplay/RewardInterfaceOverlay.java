@@ -112,13 +112,13 @@ public class RewardInterfaceOverlay extends WidgetItemOverlay
 			return;
 		}
 
-		String text = RateParser.format(entry.getRate(), config.rateFormat());
+		String text = RateParser.format(entry.getRate(), config.rewardRateFormat());
 		FontMetrics metrics = graphics.getFontMetrics();
 		int x = bounds.x + (bounds.width - metrics.stringWidth(text)) / 2;
 		int y = bounds.y + bounds.height;
 
 		textComponent.setText(text);
-		textComponent.setColor(RarityColor.resolve(text, config.rateColor(), config.colourByRarity()));
+		textComponent.setColor(RarityColor.colour(text, config));
 		textComponent.setOutline(true);
 		textComponent.setPosition(new Point(x, y));
 		textComponent.render(graphics);
