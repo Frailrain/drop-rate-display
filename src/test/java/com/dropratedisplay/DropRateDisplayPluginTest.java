@@ -192,14 +192,26 @@ public class DropRateDisplayPluginTest
 		verify(inventoryOverlay).addRate(eq(RUNE_FULL_HELM_ID), eq("1/40"));
 	}
 
-	/** Wall beasts retreat into the wall, so they never fire NpcLootReceived; loot comes via ServerNpcLoot. */
+	/**
+	 * Wall beast floor loot is attributed to the "Hole in the wall" NPC; the data store maps that to the
+	 * Wall beast table, so it renders on the ground like any normal drop.
+	 */
 	@Test
-	public void wallBeastServerLootShowsChatAndInventoryRate()
+	public void wallBeastFloorLootResolvesViaHoleInTheWall()
+	{
+		plugin.onNpcLootReceived(npcLoot("Hole in the wall", new ItemStack(RUNE_FULL_HELM_ID, 1)));
+
+		verify(overlay).addGroundRate(eq(new WorldPoint(3200, 3200, 0)), eq(RUNE_FULL_HELM_ID), eq("Rune full helm"), contains("1/32"));
+	}
+
+	/** Wall beasts are shown on the floor (via "Hole in the wall"), so their ServerNpcLoot must be ignored. */
+	@Test
+	public void wallBeastServerLootIsIgnoredToAvoidDoubling()
 	{
 		plugin.handleServerNpcLoot("Wall beast", itemMap(RUNE_FULL_HELM_ID, 1));
 
-		verify(chatMessageManager).queue(any());
-		verify(inventoryOverlay).addRate(eq(RUNE_FULL_HELM_ID), eq("1/32"));
+		verify(chatMessageManager, never()).queue(any());
+		verify(inventoryOverlay, never()).addRate(anyInt(), any());
 	}
 
 	/** Ordinary kills also fire ServerNpcLoot but are shown on the ground; only implings route here. */

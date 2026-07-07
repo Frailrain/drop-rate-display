@@ -48,6 +48,9 @@ public class DropRateDataStore
 		SOURCE_NAME_OVERRIDES.put("Tempoross", "Reward pool");
 		SOURCE_NAME_OVERRIDES.put("Wintertodt", "Reward Cart");
 		SOURCE_NAME_OVERRIDES.put("Guardians of the Rift", "Rewards Guardian");
+		// A wall beast's floor loot is attributed to the "Hole in the wall" NPC it emerges from, but the
+		// wiki drop table lives under "Wall beast".
+		SOURCE_NAME_OVERRIDES.put("Hole in the wall", "Wall beast");
 	}
 
 	private final Gson gson;
