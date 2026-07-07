@@ -9,9 +9,20 @@ actions.
 
 ## Screenshots
 
+*Floor drops — every item on a stack gets its own rate, flush after its Ground Items line:*
+
+![A dragon kill's drops, each with its own rate on the ground](images/ground-merge.png)
+
+*Reward screens — the rate is painted on each item (clue caskets, chests, raids, the Perilous Moons
+Lunar Chest, and more):*
+
 ![Drop rates painted on a reward interface](images/reward-interface.png)
 
-*Every item on a reward interface — clue caskets, chests, raids — is annotated in place.*
+![A drop rate on a Lunar Chest reward item](images/reward-lunar-chest.png)
+
+*Inventory loot — the rate is also printed to chat (here, a Brimstone chest):*
+
+![A drop rate printed to the chatbox](images/chat.png)
 
 ## Where the rate shows
 
