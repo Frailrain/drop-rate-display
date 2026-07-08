@@ -123,8 +123,22 @@ public class DropRateDisplayPluginTest
 	@Test
 	public void npcDropRendersRateOnGround()
 	{
+		// No spawn recorded this tick, so the rate falls back to the NPC's own tile (the common case).
 		plugin.onNpcLootReceived(npcLoot("Abyssal demon", new ItemStack(WHIP_ID, 1)));
 		verify(overlay).addGroundRate(eq(new WorldPoint(3200, 3200, 0)), eq(WHIP_ID), eq("Abyssal whip"), contains("1/512"));
+	}
+
+	/**
+	 * Many bosses (the Leviathan, the Wilderness trio, …) drop loot under the player, not on the NPC's tile,
+	 * and NpcLootReceived carries no location. The rate must anchor to where the item actually spawned.
+	 */
+	@Test
+	public void bossLootAnchorsToSpawnTileNotNpcTile()
+	{
+		WorldPoint underPlayer = new WorldPoint(3210, 3215, 0);
+		plugin.recentSpawns.record(100, WHIP_ID, underPlayer); // the whip spawned here this tick (tick 100)
+		plugin.onNpcLootReceived(npcLoot("Abyssal demon", new ItemStack(WHIP_ID, 1))); // NPC is at (3200, 3200)
+		verify(overlay).addGroundRate(eq(underPlayer), eq(WHIP_ID), eq("Abyssal whip"), contains("1/512"));
 	}
 
 	/** A multi-quantity drop shows the rate for the exact stack received: x4 resolves to the primary row. */

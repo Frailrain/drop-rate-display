@@ -149,6 +149,10 @@ public class DropRateDisplayPlugin extends Plugin
 	private String pendingSource;
 	private int pendingTick = Integer.MIN_VALUE;
 
+	// Where each item spawned this tick, so a floor drop is anchored to where the loot actually landed
+	// rather than the NPC's tile (many bosses drop under the player). Package-private for tests.
+	RecentSpawns recentSpawns = new RecentSpawns();
+
 	@Provides
 	DropRateDisplayConfig provideConfig(ConfigManager configManager)
 	{
@@ -215,9 +219,23 @@ public class DropRateDisplayPlugin extends Plugin
 			}
 
 			// Store the raw wiki rate; the overlay applies the format, rarity filter and colour each frame,
-			// so changing any of those settings updates what is already on screen.
-			overlay.addGroundRate(location, item.getId(), itemName, entry.getRate());
+			// so changing any of those settings updates what is already on screen. Anchor to where the item
+			// actually spawned this tick (bosses like the Leviathan drop under the player, not on their tile).
+			overlay.addGroundRate(dropTileFor(item.getId(), location), item.getId(), itemName, entry.getRate());
 		}
+	}
+
+	/**
+	 * The tile to anchor a floor rate on. {@link NpcLootReceived} carries no location, and many bosses
+	 * (the Leviathan, the Wilderness trio, Vorkath, Nex, …) drop loot under the player rather than on the
+	 * NPC's tile. RuneLite's LootManager gathers the loot from wherever it spawned this tick, so we mirror
+	 * that: use the tile the item was seen spawning on this tick, falling back to the NPC's own tile when we
+	 * didn't see it spawn (e.g. loot that goes straight to the inventory).
+	 */
+	private WorldPoint dropTileFor(int itemId, WorldPoint npcLocation)
+	{
+		final WorldPoint spawned = recentSpawns.tileFor(client.getTickCount(), itemId);
+		return spawned != null ? spawned : npcLocation;
 	}
 
 	/**
@@ -267,7 +285,12 @@ public class DropRateDisplayPlugin extends Plugin
 	@Subscribe
 	public void onItemSpawned(ItemSpawned event)
 	{
-		groundItemTracker.add(event.getTile().getWorldLocation(), event.getItem().getId(), event.getItem().getQuantity());
+		final WorldPoint tile = event.getTile().getWorldLocation();
+		final int itemId = event.getItem().getId();
+		groundItemTracker.add(tile, itemId, event.getItem().getQuantity());
+		// NpcLootReceived carries no location; remember where each item spawned this tick so a boss drop
+		// that lands under the player is anchored there rather than on the NPC's tile.
+		recentSpawns.record(client.getTickCount(), itemId, tile);
 	}
 
 	@Subscribe
@@ -591,5 +614,6 @@ public class DropRateDisplayPlugin extends Plugin
 		recentAdded = null;
 		inventorySnapshot = new HashMap<>();
 		rewardOverlay.setClueCasketSource(null);
+		recentSpawns.clear();
 	}
 }
