@@ -98,7 +98,7 @@ public class RewardInterfaceOverlay extends WidgetItemOverlay
 		}
 
 		String itemName = itemManager.getItemComposition(itemId).getName();
-		DropRateEntry entry = table.getDrop(itemName);
+		DropRateEntry entry = table.getDrop(itemName, widgetItem.getQuantity());
 		if (entry == null
 			|| !RateParser.shouldDisplay(entry.getRate(), config.minimumRarity(), config.showQualitativeRates(),
 			config.showGuaranteedDrops()))

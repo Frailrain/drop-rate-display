@@ -208,7 +208,7 @@ public class DropRateDisplayPlugin extends Plugin
 		for (ItemStack item : event.getItems())
 		{
 			String itemName = itemManager.getItemComposition(item.getId()).getName();
-			DropRateEntry entry = table.getDrop(itemName);
+			DropRateEntry entry = table.getDrop(itemName, item.getQuantity());
 			if (entry == null)
 			{
 				continue;
@@ -487,10 +487,12 @@ public class DropRateDisplayPlugin extends Plugin
 
 		String displaySource = table.getSourceName() != null ? table.getSourceName() : source;
 
-		for (Integer itemId : added.keySet())
+		for (Map.Entry<Integer, Integer> addedItem : added.entrySet())
 		{
+			int itemId = addedItem.getKey();
+			int quantity = addedItem.getValue();
 			String itemName = itemManager.getItemComposition(itemId).getName();
-			DropRateEntry entry = table.getDrop(itemName);
+			DropRateEntry entry = table.getDrop(itemName, quantity);
 			if (entry == null)
 			{
 				continue;

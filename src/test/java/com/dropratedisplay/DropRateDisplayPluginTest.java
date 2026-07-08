@@ -30,7 +30,8 @@ public class DropRateDisplayPluginTest
 	private static final String JSON = "{\"version\":\"test\",\"sources\":{"
 		+ "\"Abyssal demon\":{\"npcIds\":[415],\"drops\":{"
 		+ "\"Abyssal whip\":{\"rate\":\"1/512\",\"quantity\":\"1\"},"
-		+ "\"Bones\":{\"rate\":\"Always\",\"quantity\":\"1\"}"
+		+ "\"Bones\":{\"rate\":\"Always\",\"quantity\":\"1\"},"
+		+ "\"Numulite\":{\"rate\":\"29/128\",\"quantity\":\"4\",\"variants\":[{\"rate\":\"8/128\",\"quantity\":\"2\"}]}"
 		+ "}},"
 		+ "\"Martial salvage\":{\"drops\":{"
 		+ "\"Rune full helm\":{\"rate\":\"1/25.6\",\"quantity\":\"1\"}"
@@ -45,6 +46,7 @@ public class DropRateDisplayPluginTest
 	private static final int WHIP_ID = 4151;
 	private static final int BONES_ID = 526;
 	private static final int RUNE_FULL_HELM_ID = 1163;
+	private static final int NUMULITE_ID = 21341;
 
 	private DropRateDisplayPlugin plugin;
 	private DropRateDisplayConfig config;
@@ -77,6 +79,7 @@ public class DropRateDisplayPluginTest
 		mockItem(WHIP_ID, "Abyssal whip");
 		mockItem(BONES_ID, "Bones");
 		mockItem(RUNE_FULL_HELM_ID, "Rune full helm");
+		mockItem(NUMULITE_ID, "Numulite");
 
 		overlay = mock(DropRateDisplayOverlay.class);
 		inventoryOverlay = mock(DropRateInventoryOverlay.class);
@@ -122,6 +125,22 @@ public class DropRateDisplayPluginTest
 	{
 		plugin.onNpcLootReceived(npcLoot("Abyssal demon", new ItemStack(WHIP_ID, 1)));
 		verify(overlay).addGroundRate(eq(new WorldPoint(3200, 3200, 0)), eq(WHIP_ID), eq("Abyssal whip"), contains("1/512"));
+	}
+
+	/** A multi-quantity drop shows the rate for the exact stack received: x4 resolves to the primary row. */
+	@Test
+	public void multiQuantityDropUsesRateForItsQuantity()
+	{
+		plugin.onNpcLootReceived(npcLoot("Abyssal demon", new ItemStack(NUMULITE_ID, 4)));
+		verify(overlay).addGroundRate(any(), eq(NUMULITE_ID), eq("Numulite"), eq("29/128"));
+	}
+
+	/** The same item at a different quantity shows the variant's rate, not the primary: x2 -> 8/128. */
+	@Test
+	public void multiQuantityDropUsesVariantRateForOtherQuantity()
+	{
+		plugin.onNpcLootReceived(npcLoot("Abyssal demon", new ItemStack(NUMULITE_ID, 2)));
+		verify(overlay).addGroundRate(any(), eq(NUMULITE_ID), eq("Numulite"), eq("8/128"));
 	}
 
 	/**

@@ -104,11 +104,38 @@ def parse_drop_row(row):
 
 
 def add_drop(drops, parsed):
-    """Adds a parsed drop to a source's drops dict, keeping the first rate seen for an item."""
+    """Records a parsed drop under its item, keeping every distinct quantity as its own variant.
+
+    Within one item, the first rate seen for a given quantity wins (e.g. Standard before Wilderness),
+    which avoids rate churn; but different quantities of the same item (e.g. Numulite x2 vs x4, each
+    with its own rate) are kept side by side so the plugin can show the rate for the exact stack the
+    player received. ``drops`` holds the internal shape ``item_name -> [ {rate, quantity}, ... ]``;
+    call finalize_drops() to convert it to the output shape.
+    """
     item_name, rarity, quantity = parsed
-    if item_name in drops:
-        return  # first variant wins (e.g. Standard before Wilderness); avoids rate churn
-    drops[item_name] = {"rate": rarity, "quantity": quantity}
+    variants = drops.setdefault(item_name, [])
+    for existing in variants:
+        if existing["quantity"] == quantity:
+            return  # same (item, quantity) already recorded; first rate seen wins
+    variants.append({"rate": rarity, "quantity": quantity})
+
+
+def finalize_drops(drops):
+    """Converts the internal ``item_name -> [variant, ...]`` map into the output shape.
+
+    The first variant becomes the entry's top-level ``rate``/``quantity`` -- this doubles as the
+    fallback the plugin shows when a received quantity matches no row -- and any further quantities
+    are listed under ``variants``:
+
+        "Numulite": {"rate": "29/128", "quantity": "4", "variants": [{"rate": "...", "quantity": "2"}]}
+    """
+    out = {}
+    for item_name, variants in drops.items():
+        entry = {"rate": variants[0]["rate"], "quantity": variants[0]["quantity"]}
+        if len(variants) > 1:
+            entry["variants"] = variants[1:]
+        out[item_name] = entry
+    return out
 
 
 def fetch_source_drops(source):
@@ -131,7 +158,7 @@ def fetch_source_drops(source):
             break
         offset += ROWS_PER_REQUEST
         time.sleep(REQUEST_DELAY)
-    return drops
+    return finalize_drops(drops)
 
 
 def fetch_source_npc_ids(source):
@@ -240,7 +267,7 @@ def build_full():
         out = {}
         if page in monster_ids and monster_ids[page]:
             out["npcIds"] = sorted(monster_ids[page])
-        out["drops"] = entry["drops"]
+        out["drops"] = finalize_drops(entry["drops"])
         result[page] = out
     return result
 

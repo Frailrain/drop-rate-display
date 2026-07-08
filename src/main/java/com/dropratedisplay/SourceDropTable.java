@@ -51,6 +51,16 @@ public class SourceDropTable
 			if (entry != null)
 			{
 				entry.setItemName(e.getKey());
+				if (entry.getVariants() != null)
+				{
+					for (DropRateEntry variant : entry.getVariants())
+					{
+						if (variant != null)
+						{
+							variant.setItemName(e.getKey());
+						}
+					}
+				}
 				lowerCaseIndex.put(e.getKey().toLowerCase(Locale.ROOT), entry);
 			}
 		}
@@ -74,6 +84,20 @@ public class SourceDropTable
 			entry = lowerCaseIndex.get(itemName.toLowerCase(Locale.ROOT));
 		}
 		return entry;
+	}
+
+	/**
+	 * Looks up a drop by item name, then narrows to the row matching {@code quantity} -- so an item the
+	 * wiki lists at several quantities (e.g. Numulite &times;2 vs &times;4, each with its own rate)
+	 * resolves to the rate for the stack actually received. Falls back to the primary row when no
+	 * quantity row matches.
+	 *
+	 * @return the matching entry, or null if this source does not drop the item (or has no known rate).
+	 */
+	public DropRateEntry getDrop(String itemName, int quantity)
+	{
+		DropRateEntry entry = getDrop(itemName);
+		return entry == null ? null : entry.selectForQuantity(quantity);
 	}
 
 	public boolean matchesNpcId(int npcId)

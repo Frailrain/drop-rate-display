@@ -15,7 +15,13 @@ public class DropRateDataStoreTest
 	private static final String JSON = "{"
 		+ "\"version\":\"test\",\"sources\":{"
 		+ "\"Abyssal demon\":{\"npcIds\":[415,7241],\"drops\":{\"Abyssal whip\":{\"rate\":\"1/512\",\"quantity\":\"1\"}}},"
-		+ "\"Martial salvage\":{\"drops\":{\"Rune full helm\":{\"rate\":\"1/25.6\",\"quantity\":\"1\"}}}"
+		+ "\"Martial salvage\":{\"drops\":{\"Rune full helm\":{\"rate\":\"1/25.6\",\"quantity\":\"1\"}}},"
+		// Numulite is dropped at four different quantities, each with its own rate (as real Ammonite Crabs do).
+		+ "\"Ammonite Crab\":{\"drops\":{\"Numulite\":{\"rate\":\"29/128\",\"quantity\":\"4\",\"variants\":["
+		+ "{\"rate\":\"8/128\",\"quantity\":\"2\"},"
+		+ "{\"rate\":\"6/128\",\"quantity\":\"8\"},"
+		+ "{\"rate\":\"27/175\",\"quantity\":\"5-14\"}"
+		+ "]}}}"
 		+ "}}";
 
 	private DropRateDataStore store;
@@ -30,8 +36,54 @@ public class DropRateDataStoreTest
 	@Test
 	public void loadsAllSources()
 	{
-		assertEquals(2, store.getSourceCount());
+		assertEquals(3, store.getSourceCount());
 		assertEquals("test", store.getVersion());
+	}
+
+	/** The primary row's own quantity resolves to the primary rate. */
+	@Test
+	public void quantityLookupMatchesPrimaryRow()
+	{
+		DropRateEntry entry = store.getSource("Ammonite Crab").getDrop("Numulite", 4);
+		assertNotNull(entry);
+		assertEquals("29/128", entry.getRate());
+	}
+
+	/** A quantity carried by a variant resolves to that variant's rate, not the primary. */
+	@Test
+	public void quantityLookupMatchesVariantRow()
+	{
+		assertEquals("8/128", store.getSource("Ammonite Crab").getDrop("Numulite", 2).getRate());
+		assertEquals("6/128", store.getSource("Ammonite Crab").getDrop("Numulite", 8).getRate());
+	}
+
+	/** A quantity inside a range variant resolves to that range's rate. */
+	@Test
+	public void quantityLookupMatchesRangeVariant()
+	{
+		assertEquals("27/175", store.getSource("Ammonite Crab").getDrop("Numulite", 7).getRate());
+	}
+
+	/** 8 is both an exact variant (x8) and inside a range variant (5-14); the exact row must win. */
+	@Test
+	public void exactQuantityBeatsOverlappingRange()
+	{
+		assertEquals("6/128", store.getSource("Ammonite Crab").getDrop("Numulite", 8).getRate());
+	}
+
+	/** A quantity no row lists falls back to the primary row rather than showing nothing. */
+	@Test
+	public void unmatchedQuantityFallsBackToPrimary()
+	{
+		assertEquals("29/128", store.getSource("Ammonite Crab").getDrop("Numulite", 3).getRate());
+	}
+
+	/** Items with a single quantity row return that row for any received count. */
+	@Test
+	public void singleRowItemIgnoresQuantity()
+	{
+		assertEquals("1/512", store.getSource("Abyssal demon").getDrop("Abyssal whip", 1).getRate());
+		assertEquals("1/512", store.getSource("Abyssal demon").getDrop("Abyssal whip", 99).getRate());
 	}
 
 	@Test
