@@ -86,6 +86,23 @@ python scripts/generate_drop_rates.py --sources "Abyssal demon,Vorkath,Chest (Ba
 python scripts/generate_drop_rates.py --full -o src/main/resources/drop_rates.json
 ```
 
+The script compares the freshly fetched `sources` against the existing file and only rewrites it (bumping
+the `version` date) when the drop data actually changed. It prints a summary of sources added, removed and
+changed. If any wiki request fails, or the result is empty or implausibly smaller than the existing file,
+it exits non-zero without touching the file.
+
+Useful flags: `--non-interactive` (never prompt; used by CI), `--summary-file PATH` (also write the
+change summary as Markdown), `--input FILE` (skip fetching and run the compare logic against previously
+generated data), `--allow-shrink` (accept a result with far fewer sources than before).
+
+### Monthly automatic refresh
+
+[`.github/workflows/refresh-drop-data.yml`](.github/workflows/refresh-drop-data.yml) runs the full
+rebuild on the 1st of every month (and on demand from the Actions tab via **Run workflow**). If the data
+changed it pushes to the `data-refresh` branch and opens, or updates, a pull request with the change
+summary. If nothing changed it exits without a commit. Submitting the new version to the RuneLite plugin
+hub remains a manual step.
+
 ## Building
 
 ```sh

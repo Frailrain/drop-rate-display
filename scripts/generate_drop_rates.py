@@ -2,15 +2,28 @@
 Generates the bundled ``drop_rates.json`` file from the OSRS Wiki Bucket API.
 
 This is a build-time tool, not part of the plugin runtime. Run it before a release to
-refresh the bundled data.
+refresh the bundled data. The monthly ``refresh-drop-data`` GitHub Action runs it in
+``--full --non-interactive`` mode and opens a pull request when the data has changed.
 
-Two modes:
+Modes:
 
   # Targeted: only the named sources (fast; used to build a curated sample).
   python generate_drop_rates.py --sources "Abyssal demon,Vorkath,Barrows" -o out.json
 
   # Full: scan every drop-table line on the wiki (slow; several hundred requests).
   python generate_drop_rates.py --full -o ../src/main/resources/drop_rates.json
+
+  # Offline: re-run the compare/summary logic against previously generated data, no requests.
+  python generate_drop_rates.py --input fetched.json -o ../src/main/resources/drop_rates.json
+
+Change detection: the ``version`` field is the generation date and would make every run look
+like a change. The script therefore compares the freshly built ``sources`` against the
+``sources`` in the existing output file and only rewrites the file (bumping ``version``) when
+they actually differ. A change summary (sources added / removed / changed) is printed to
+stdout and optionally written to ``--summary-file`` for the workflow's PR description.
+
+Safety: if any API call fails after retries, returns empty data, or the result is implausibly
+smaller than the existing file, the script exits non-zero without touching the output file.
 
 Data model (verified against the live API, July 2026):
 
@@ -31,6 +44,7 @@ Requires: requests (pip install requests)
 
 import argparse
 import json
+import os
 import sys
 import time
 from collections import defaultdict
@@ -38,10 +52,35 @@ from collections import defaultdict
 import requests
 
 WIKI_API = "https://oldschool.runescape.wiki/api.php"
-USER_AGENT = "DropRateDisplay/1.0 (RuneLite plugin data generator; contact: Frailrain)"
+USER_AGENT = (
+    "DropRateDisplay/1.0 (RuneLite plugin data generator; "
+    "https://github.com/Frailrain/drop-rate-display; contact: Frailrain)"
+)
 HEADERS = {"User-Agent": USER_AGENT}
 ROWS_PER_REQUEST = 500
-REQUEST_DELAY = 1.0  # seconds between requests
+REQUEST_DELAY = 1.0  # minimum seconds between requests (wiki courtesy limit)
+
+# A fresh full scan returning fewer than this fraction of the existing source count is treated
+# as a partial/broken result rather than a real change, so the good data is never overwritten.
+MIN_SOURCE_RATIO = 0.9
+
+# How many names to list per category in the change summary before truncating.
+SUMMARY_LIST_LIMIT = 40
+
+_last_request_at = 0.0
+
+
+class GenerationError(Exception):
+    """Raised when the data could not be fetched or fails a sanity check."""
+
+
+def _pace():
+    """Sleeps so that consecutive requests are at least REQUEST_DELAY seconds apart."""
+    global _last_request_at
+    wait = REQUEST_DELAY - (time.monotonic() - _last_request_at)
+    if wait > 0:
+        time.sleep(wait)
+    _last_request_at = time.monotonic()
 
 
 def fetch_bucket(query, retries=4):
@@ -49,10 +88,11 @@ def fetch_bucket(query, retries=4):
 
     Retries transient network/HTTP failures with backoff so a long unattended full scan is not
     lost to a single blip. A Bucket 'error' in the payload is a query bug, not transient, so it
-    is raised immediately without retry.
+    is raised immediately without retry. Every attempt is paced to the courtesy limit.
     """
     last_error = None
     for attempt in range(retries):
+        _pace()
         try:
             response = requests.get(
                 WIKI_API,
@@ -63,15 +103,18 @@ def fetch_bucket(query, retries=4):
             response.raise_for_status()
             payload = response.json()
             if "error" in payload:
-                raise RuntimeError(f"Bucket API error for query [{query}]: {payload['error']}")
+                raise GenerationError(f"Bucket API error for query [{query}]: {payload['error']}")
             # Rows live under "bucket"; fall back to other keys defensively.
-            return payload.get("bucket", payload.get("data", payload.get("rows", [])))
-        except requests.RequestException as exc:
+            rows = payload.get("bucket", payload.get("data", payload.get("rows")))
+            if not isinstance(rows, list):
+                raise GenerationError(f"Unexpected Bucket response shape for query [{query}]")
+            return rows
+        except (requests.RequestException, ValueError) as exc:
             last_error = exc
             wait = 2 ** attempt
             print(f"  request failed ({exc}); retry {attempt + 1}/{retries} in {wait}s", file=sys.stderr)
             time.sleep(wait)
-    raise RuntimeError(f"Bucket query failed after {retries} attempts: {last_error}")
+    raise GenerationError(f"Bucket query failed after {retries} attempts: {last_error}")
 
 
 def _escape(value):
@@ -157,7 +200,6 @@ def fetch_source_drops(source):
         if len(rows) < ROWS_PER_REQUEST:
             break
         offset += ROWS_PER_REQUEST
-        time.sleep(REQUEST_DELAY)
     return finalize_drops(drops)
 
 
@@ -194,9 +236,7 @@ def build_targeted(sources):
     for source in sources:
         print(f"Fetching '{source}'...", file=sys.stderr)
         drops = fetch_source_drops(source)
-        time.sleep(REQUEST_DELAY)
         npc_ids = fetch_source_npc_ids(source)
-        time.sleep(REQUEST_DELAY)
         if not drops:
             print(f"  (no drop lines found for '{source}' -- skipped)", file=sys.stderr)
             continue
@@ -229,7 +269,8 @@ def fetch_all_monster_ids():
         if len(rows) < ROWS_PER_REQUEST:
             break
         offset += ROWS_PER_REQUEST
-        time.sleep(REQUEST_DELAY)
+    if not ids:
+        raise GenerationError("infobox_monster scan returned no rows")
     return ids
 
 
@@ -258,7 +299,6 @@ def build_full():
         if len(rows) < ROWS_PER_REQUEST:
             break
         offset += ROWS_PER_REQUEST
-        time.sleep(REQUEST_DELAY)
 
     result = {}
     for page, entry in sources.items():
@@ -272,28 +312,135 @@ def build_full():
     return result
 
 
+def load_sources(path):
+    """Reads the ``sources`` dict from a previously generated file, or None if absent."""
+    if not os.path.exists(path):
+        return None
+    with open(path, encoding="utf-8") as f:
+        data = json.load(f)
+    sources = data.get("sources")
+    if not isinstance(sources, dict):
+        raise GenerationError(f"{path} has no 'sources' object")
+    return sources
+
+
+def diff_sources(old, new):
+    """Returns (added, removed, changed): sorted lists of source names."""
+    old = old or {}
+    added = sorted(name for name in new if name not in old)
+    removed = sorted(name for name in old if name not in new)
+    changed = sorted(name for name in new if name in old and old[name] != new[name])
+    return added, removed, changed
+
+
+def _format_list(title, names):
+    lines = [f"### {title} ({len(names)})"]
+    if not names:
+        lines.append("_none_")
+        return lines
+    for name in names[:SUMMARY_LIST_LIMIT]:
+        lines.append(f"- {name}")
+    if len(names) > SUMMARY_LIST_LIMIT:
+        lines.append(f"- ...and {len(names) - SUMMARY_LIST_LIMIT} more")
+    return lines
+
+
+def format_summary(old, new, added, removed, changed):
+    """Builds the Markdown change summary used for the pull request body."""
+    old_count = len(old) if old is not None else 0
+    old_drops = sum(len(s["drops"]) for s in (old or {}).values())
+    new_drops = sum(len(s["drops"]) for s in new.values())
+    lines = ["## Drop data change summary", ""]
+    if not (added or removed or changed):
+        lines.append(f"No changes: {len(new)} sources, {new_drops} drops match the existing data.")
+        return "\n".join(lines) + "\n"
+    lines.append(f"Sources: {old_count} -> {len(new)}. Drops: {old_drops} -> {new_drops}.")
+    lines.append("")
+    lines.extend(_format_list("Sources added", added))
+    lines.append("")
+    lines.extend(_format_list("Sources removed", removed))
+    lines.append("")
+    lines.extend(_format_list("Sources with changed drops", changed))
+    return "\n".join(lines) + "\n"
+
+
+def check_sanity(old, new, allow_shrink):
+    """Rejects empty or implausibly small results so partial data never replaces good data."""
+    if not new:
+        raise GenerationError("no sources were produced; refusing to write an empty data file")
+    if old and not allow_shrink:
+        floor = int(len(old) * MIN_SOURCE_RATIO)
+        if len(new) < floor:
+            raise GenerationError(
+                f"new data has {len(new)} sources but the existing file has {len(old)} "
+                f"(below {MIN_SOURCE_RATIO:.0%}); this looks like a partial result. "
+                f"Re-run with --allow-shrink if the drop is genuine."
+            )
+
+
 def main():
     parser = argparse.ArgumentParser(description="Generate drop_rates.json from the OSRS Wiki.")
     parser.add_argument("--full", action="store_true", help="Scan every drop line on the wiki.")
     parser.add_argument("--sources", help="Comma-separated source page names (targeted mode).")
+    parser.add_argument(
+        "--input",
+        help="Skip fetching; load 'sources' from this previously generated JSON file "
+        "(for testing the compare logic offline).",
+    )
     parser.add_argument("-o", "--out", default="drop_rates.json", help="Output path.")
+    parser.add_argument(
+        "--non-interactive",
+        action="store_true",
+        help="Never prompt or wait for input (for CI). The script currently has no prompts; "
+        "the flag is accepted so automation is stable if one is ever added.",
+    )
+    parser.add_argument(
+        "--summary-file", help="Also write the Markdown change summary to this path."
+    )
+    parser.add_argument(
+        "--allow-shrink",
+        action="store_true",
+        help="Allow a result with far fewer sources than the existing file (see MIN_SOURCE_RATIO).",
+    )
     args = parser.parse_args()
 
-    if args.full:
-        sources = build_full()
-    elif args.sources:
-        names = [s.strip() for s in args.sources.split(",") if s.strip()]
-        sources = build_targeted(names)
-    else:
-        parser.error("specify --full or --sources")
+    try:
+        existing = load_sources(args.out)
+
+        if args.input:
+            sources = load_sources(args.input)
+            if sources is None:
+                raise GenerationError(f"--input file not found: {args.input}")
+        elif args.full:
+            sources = build_full()
+        elif args.sources:
+            names = [s.strip() for s in args.sources.split(",") if s.strip()]
+            sources = build_targeted(names)
+        else:
+            parser.error("specify --full, --sources or --input")
+            return
+
+        check_sanity(existing, sources, args.allow_shrink)
+    except GenerationError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        print(f"{args.out} was not modified.", file=sys.stderr)
+        sys.exit(1)
+
+    added, removed, changed = diff_sources(existing, sources)
+    summary = format_summary(existing, sources, added, removed, changed)
+    print(summary, end="")
+    if args.summary_file:
+        with open(args.summary_file, "w", encoding="utf-8") as f:
+            f.write(summary)
+
+    total_drops = sum(len(s["drops"]) for s in sources.values())
+    if existing is not None and not (added or removed or changed):
+        print(f"{args.out} unchanged ({len(sources)} sources, {total_drops} drops)", file=sys.stderr)
         return
 
     output = {"version": time.strftime("%Y-%m-%d"), "sources": sources}
-    total_drops = sum(len(s["drops"]) for s in sources.values())
-
     with open(args.out, "w", encoding="utf-8") as f:
         json.dump(output, f, separators=(",", ":"), ensure_ascii=False)
-
     print(f"Wrote {args.out}: {len(sources)} sources, {total_drops} drops", file=sys.stderr)
 
 
