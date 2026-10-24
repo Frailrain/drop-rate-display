@@ -321,7 +321,7 @@ public class DropRateDisplayOverlay extends Overlay
 			}
 			else
 			{
-				final int price = priceMode == PriceMode.GE ? info.gePrice : info.haPrice;
+				final long price = priceMode == PriceMode.GE ? info.gePrice : info.haPrice;
 				if (price > 0)
 				{
 					sb.append(" (").append(QuantityFormatter.quantityToStackSize(price)).append(" gp)");
@@ -337,7 +337,7 @@ public class DropRateDisplayOverlay extends Overlay
 	{
 		final ItemComposition comp = itemManager.getItemComposition(id);
 		final int realId = comp.getNote() != -1 ? comp.getLinkedNoteId() : id;
-		final int unitGe;
+		final long unitGe;
 		final int unitHa;
 		if (realId == COINS)
 		{
@@ -545,11 +545,11 @@ public class DropRateDisplayOverlay extends Overlay
 	{
 		private final int id;
 		private final String name;
-		private final int gePrice;
-		private final int haPrice;
+		private final long gePrice;
+		private final long haPrice;
 		private final boolean tradeable;
 
-		private ItemInfo(int id, String name, int gePrice, int haPrice, boolean tradeable)
+		private ItemInfo(int id, String name, long gePrice, long haPrice, boolean tradeable)
 		{
 			this.id = id;
 			this.name = name;
