@@ -99,9 +99,9 @@ generated data), `--allow-shrink` (accept a result with far fewer sources than b
 
 [`.github/workflows/refresh-drop-data.yml`](.github/workflows/refresh-drop-data.yml) runs the full
 rebuild on the 1st of every month (and on demand from the Actions tab via **Run workflow**). If the data
-changed it pushes to the `data-refresh` branch and opens, or updates, a pull request with the change
-summary. If nothing changed it exits without a commit. Submitting the new version to the RuneLite plugin
-hub remains a manual step.
+changed it commits the new file straight to `main` with the change summary in the commit message; the
+summary also appears on the run's page in the Actions tab. If nothing changed it exits without a commit.
+Submitting the new version to the RuneLite plugin hub remains a manual step.
 
 ## Building
 
